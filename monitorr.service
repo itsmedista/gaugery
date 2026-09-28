@@ -1,0 +1,15 @@
+[Unit]
+Description=Monitorr server dashboard
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=-/etc/monitorr.env
+WorkingDirectory=/opt/monitorr
+ExecStart=/opt/monitorr/venv/bin/python /opt/monitorr/app.py
+Restart=on-failure
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

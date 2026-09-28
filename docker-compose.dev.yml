@@ -1,0 +1,27 @@
+# Sandbox: runs your working copy next to production without touching it.
+#   docker compose -f docker-compose.dev.yml up -d --build
+#   open http://localhost:8089
+# It has its own container name, port, and history (./data-dev), and it only listens on this
+# machine. Works on Docker Desktop too, where it monitors Docker's Linux VM.
+name: monitorr-dev
+
+services:
+  monitorr-dev:
+    build: .
+    image: monitorr:dev
+    container_name: monitorr-dev
+    pid: host
+    privileged: true
+    ports:
+      - "127.0.0.1:8089:8088"
+    volumes:
+      - /:/host:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data-dev:/data
+    environment:
+      # Same .env file as production: AUTH_PASSWORD_HASH=...
+      AUTH_USER: ${AUTH_USER:-admin}
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
+      SAMPLE_INTERVAL: 2
+      RETENTION_DAYS: 2
+      NTFY_URL: ""   # never send phone alerts from the sandbox

@@ -1,8 +1,8 @@
 services:
-  server-monitor:
+  monitorr:
     build: .
-    image: server-monitor:latest
-    container_name: server-monitor
+    image: monitorr:latest
+    container_name: monitorr
     restart: unless-stopped
 
     # The monitor must see the host, not its own container:
@@ -20,6 +20,11 @@ services:
       - ./data:/data                                    # history database
 
     environment:
+      # Login. Put AUTH_PASSWORD_HASH=... in a .env file next to this one (it's gitignored).
+      # Make the hash with: docker compose run --rm monitorr python app.py --hash-password
+      AUTH_USER: ${AUTH_USER:-admin}
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
+      SESSION_DAYS: 30
       # Listen address. Put your Tailscale IP here (tailscale ip -4) to keep it on the tailnet.
       HOST: 0.0.0.0
       PORT: 8088

@@ -1,4 +1,4 @@
-"""server-monitor: a single-process Linux server dashboard.
+"""Monitorr: a single-process Linux server dashboard.
 
 Run:  python app.py          (see README.md for the systemd install)
 """
@@ -16,10 +16,11 @@ from pathlib import Path
 import psutil
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from alerts import AlertEngine
+from auth import COOKIE, SESSION_DAYS, Auth
 from collectors import Collector, host_info
 
 HERE = Path(__file__).resolve().parent
@@ -27,7 +28,7 @@ HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8088"))
 INTERVAL = float(os.environ.get("SAMPLE_INTERVAL", "2"))
 RETENTION_DAYS = float(os.environ.get("RETENTION_DAYS", "14"))
-DB_PATH = os.environ.get("DB_PATH", "/var/lib/server-monitor/metrics.db")
+DB_PATH = os.environ.get("DB_PATH", "/var/lib/monitorr/metrics.db")
 LIVE_SECONDS = 3600
 SPANS = {"1h": 3600, "6h": 21600, "24h": 86400, "7d": 604800}
 
@@ -189,7 +190,10 @@ class Monitor:
         return {"bucket": bucket, "points": bucketize(pts, bucket)}
 
 
-monitor = Monitor() if "--healthcheck" not in __import__("sys").argv else None
+CLI_FLAGS = ("--healthcheck", "--hash-password")
+monitor = None if any(f in __import__("sys").argv for f in CLI_FLAGS) else Monitor()
+auth = Auth(Path(monitor.db_path).parent) if monitor else None
+PUBLIC = {"/login.html", "/icon.svg", "/api/login", "/healthz"}
 
 
 @asynccontextmanager
@@ -198,12 +202,53 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="server-monitor", lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(title="Monitorr", lifespan=lifespan, docs_url=None, redoc_url=None)
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    path = request.url.path
+    if path in PUBLIC or auth.valid(request.cookies.get(COOKIE)):
+        return await call_next(request)
+    if path.startswith("/api/"):
+        return JSONResponse({"detail": "Not signed in"}, status_code=401)
+    return RedirectResponse("login.html", status_code=303)
+
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
+
+
+@app.post("/api/login")
+async def api_login(request: Request):
+    ip = request.client.host if request.client else "?"
+    if auth.locked(ip):
+        raise HTTPException(429, "Too many attempts. Wait a few minutes and try again.")
+    try:
+        body = await request.json()
+        user, password = str(body["user"]), str(body["password"])
+    except (ValueError, KeyError, TypeError):
+        raise HTTPException(400, "Send user and password") from None
+    if not auth.login(ip, user, password):
+        raise HTTPException(401, "Wrong username or password")
+    resp = JSONResponse({"ok": True})
+    https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    resp.set_cookie(COOKIE, auth.issue(), max_age=int(SESSION_DAYS * 86400),
+                    httponly=True, samesite="lax", secure=https)
+    return resp
+
+
+@app.post("/api/logout")
+def api_logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(COOKIE)
+    return resp
 
 
 @app.get("/api/info")
 def api_info():
-    return monitor.info
+    return {**monitor.info, "auth": auth.enabled}
 
 
 @app.get("/api/recent")
@@ -244,12 +289,17 @@ app.mount("/", StaticFiles(directory=HERE / "static", html=True), name="static")
 
 if __name__ == "__main__":
     import sys
+    if "--hash-password" in sys.argv:
+        from auth import prompt_hash
+        prompt_hash()
+        sys.exit(0)
     if "--healthcheck" in sys.argv:  # used by the Docker HEALTHCHECK
         import urllib.request
         target = "127.0.0.1" if HOST in ("0.0.0.0", "::", "") else HOST
         try:
-            urllib.request.urlopen(f"http://{target}:{PORT}/api/info", timeout=4)
+            urllib.request.urlopen(f"http://{target}:{PORT}/healthz", timeout=4)
         except Exception:  # noqa: BLE001
             sys.exit(1)
         sys.exit(0)
+    auth.check_config()
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
