@@ -1,0 +1,15 @@
+[Unit]
+Description=Server Monitor dashboard
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=-/etc/server-monitor.env
+WorkingDirectory=/opt/server-monitor
+ExecStart=/opt/server-monitor/venv/bin/python /opt/server-monitor/app.py
+Restart=on-failure
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

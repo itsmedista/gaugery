@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Server Monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315202B'/%3E%3Cpath d='M5 18h5l3-8 5 14 3-6h6' fill='none' stroke='%2335D0BA' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0D141C; --panel:#131C26; --panel2:#18232F; --raise:#1D2A38;
+  --line:#1F2C3A; --line2:#2A3A4C;
+  --text:#DCE4EC; --muted:#8395A9; --faint:#5A6B7E;
+  --teal:#35D0BA; --sky:#4FA8FF; --violet:#A08CFF; --amber:#F5B942; --rose:#FF6F91; --lime:#A5D65C;
+  --ok:#3DD68C; --warn:#F5B942; --crit:#FF5A5F;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --top:58px; --side:212px;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:calc(var(--top) + 14px)}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 var(--sans);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--sky);outline-offset:2px;border-radius:4px}
+[hidden]{display:none!important}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:20;height:var(--top);display:flex;align-items:center;gap:18px;padding:0 18px;background:rgba(13,20,28,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:11px;min-width:0;width:calc(var(--side) - 18px)}
+.brand svg{flex:none}
+.host{font-weight:600;font-size:15.5px;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hostsub{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conn{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);padding:5px 11px;border:1px solid var(--line2);border-radius:999px}
+.conn i{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.conn[data-s=live] i{background:var(--ok);box-shadow:0 0 0 0 rgba(61,214,140,.6);animation:pulse 2s infinite}
+.conn[data-s=live]{color:var(--text)}
+.conn[data-s=reconnecting] i{background:var(--warn)}
+.conn[data-s=paused] i{background:var(--sky)}
+.conn[data-s=demo] i{background:var(--violet)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(61,214,140,.55)}70%{box-shadow:0 0 0 7px rgba(61,214,140,0)}100%{box-shadow:0 0 0 0 rgba(61,214,140,0)}}
+.hovertime{font-size:12.5px;color:var(--muted);min-width:9ch}
+.spacer{flex:1}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line2);border-radius:8px;padding:2px}
+.seg button{border:0;background:none;padding:5px 11px;border-radius:6px;font-size:12.5px;color:var(--muted);cursor:pointer}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed=true]{background:var(--raise);color:var(--text);box-shadow:inset 0 0 0 1px var(--line2)}
+.btn{border:1px solid var(--line2);background:var(--panel);padding:6px 12px;border-radius:8px;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--panel2)}
+
+/* layout */
+.layout{display:grid;grid-template-columns:var(--side) minmax(0,1fr)}
+.side{position:sticky;top:var(--top);height:calc(100vh - var(--top));overflow:auto;border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.side a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;color:var(--muted);text-decoration:none;font-size:13.5px;position:relative}
+.side a svg{width:16px;height:16px;flex:none;opacity:.85}
+.side a:hover{color:var(--text);background:var(--panel)}
+.side a.on{color:var(--text);background:var(--panel2)}
+.side a.on::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--teal)}
+.badge{margin-left:auto;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:rgba(245,185,66,.16);color:var(--warn)}
+.badge.crit{background:rgba(255,90,95,.16);color:var(--crit)}
+.facts{margin-top:auto;padding:14px 10px 4px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:grid;gap:9px}
+.facts div{display:grid;gap:1px}
+.facts span{color:var(--faint);font-size:11px}
+.facts b{font-weight:500;color:var(--text);overflow-wrap:anywhere}
+
+main{padding:18px 22px 80px;min-width:0}
+section+section{margin-top:30px}
+.sh{display:flex;align-items:baseline;gap:12px;margin:0 0 12px}
+.sh h2{margin:0;font-size:15px;font-weight:600;letter-spacing:.01em}
+.sh .note{color:var(--muted);font-size:12.5px}
+.sh::after{content:"";flex:1;height:1px;background:var(--line);transform:translateY(-4px)}
+
+/* gauges */
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:10px}
+.gauge{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 8px 12px;text-align:center}
+.gauge svg{display:block;width:100%;max-width:124px;margin:0 auto;height:auto}
+.gauge .trk{fill:none;stroke:var(--panel2);stroke-width:8;stroke-linecap:round}
+.gauge .val{fill:none;stroke-width:8;stroke-linecap:round;transition:stroke-dasharray .5s ease,stroke .3s}
+.gnum{position:absolute;left:0;right:0;top:40px;display:grid;justify-items:center;line-height:1.05}
+.gnum b{font-size:24px;font-weight:600;letter-spacing:-.01em}
+.gnum span{font-size:11px;color:var(--muted);margin-top:3px}
+.glabel{font-size:13px;font-weight:500;margin-top:-6px}
+.gsub{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+
+/* alert strip */
+.strip{margin-top:12px;display:grid;gap:6px}
+.okline{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;padding:10px 14px;border:1px dashed var(--line2);border-radius:8px}
+.okline i{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.al{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:8px;padding:9px 14px}
+.al.critical{border-left-color:var(--crit)}
+.al .sev{font-size:11.5px;font-weight:600;color:var(--warn)}
+.al.critical .sev{color:var(--crit)}
+.al .tt{font-weight:500}
+.al .dd{color:var(--muted);font-size:12.5px}
+.al time{color:var(--faint);font-size:12px;white-space:nowrap}
+
+/* charts */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:10px}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px 6px;min-width:0}
+.chart.wide{grid-column:1/-1}
+.ch{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:4px}
+.ct{font-size:13px;font-weight:500;white-space:nowrap}
+.ct small{color:var(--faint);font-size:11.5px;font-weight:400;margin-left:7px}
+.lg{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:2px 4px;font-size:12px}
+.lg button{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:2px 6px;border-radius:5px;cursor:pointer;color:var(--muted)}
+.lg button:hover{background:var(--panel2)}
+.lg i{width:9px;height:9px;border-radius:2px;flex:none}
+.lg b{font-weight:500;color:var(--text);min-width:5.5ch;text-align:right}
+.lg button.off{opacity:.38}
+.cv{position:relative}
+.cv canvas{display:block;width:100%;cursor:crosshair;touch-action:pan-y}
+
+/* cores */
+.cores{margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.cores .ch{margin-bottom:8px}
+.corebars{display:flex;gap:4px;height:46px;align-items:stretch}
+.core{flex:1;min-width:5px;max-width:30px;background:var(--panel2);border-radius:3px;position:relative;overflow:hidden}
+.core i{position:absolute;left:0;right:0;bottom:0;border-radius:3px 3px 0 0;transition:height .4s ease}
+
+/* drives */
+.drives{display:grid;gap:8px;margin-bottom:10px}
+.drive{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.drive>button{all:unset;box-sizing:border-box;width:100%;display:grid;grid-template-columns:minmax(150px,1.25fr) minmax(200px,2fr) minmax(120px,.9fr) minmax(130px,1fr) minmax(130px,1fr) 14px;gap:18px;align-items:center;padding:12px 16px;cursor:pointer;border-radius:10px}
+.drive>button:hover{background:rgba(255,255,255,.015)}
+.drive>button:focus-visible{outline:2px solid var(--sky);outline-offset:-2px}
+.dname{font-family:var(--mono);font-size:13.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dmeta{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px;font-size:11.5px;color:var(--muted);align-items:center}
+.dmeta .dev{font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
+.tag{font-size:10.5px;padding:0 6px;border-radius:4px;background:var(--panel2);color:var(--muted);border:1px solid var(--line2)}
+.tag.net{color:var(--sky);border-color:rgba(79,168,255,.3)}
+.tag.ro{color:var(--crit);border-color:rgba(255,90,95,.35)}
+.urow{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;margin-bottom:5px}
+.urow b{font-size:15px;font-weight:600}
+.bar{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px;background:var(--teal);transition:width .5s ease}
+.bar i.warn{background:var(--warn)} .bar i.crit{background:var(--crit)}
+.usub{font-size:11.5px;color:var(--muted);margin-top:5px;display:flex;justify-content:space-between;gap:8px}
+.kv{font-size:12px;color:var(--muted);display:grid;gap:2px}
+.kv b{color:var(--text);font-weight:500}
+.smart{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500}
+.smart i{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.smart.ok i{background:var(--ok)} .smart.warning i{background:var(--warn)} .smart.failed i{background:var(--crit)}
+.smart.warning{color:var(--warn)} .smart.failed{color:var(--crit)} .smart.na{color:var(--muted);font-weight:400}
+.chev{width:14px;height:14px;color:var(--faint);transition:transform .2s}
+.drive.open .chev{transform:rotate(90deg)}
+.dexp{padding:0 16px 14px}
+.dexp .chart{background:var(--bg)}
+.dstatus{color:var(--crit);font-size:12.5px}
+
+/* tables */
+.tw{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-weight:500;color:var(--muted);font-size:12px;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line2);white-space:nowrap}
+th.n,td.n{text-align:right}
+th button{all:unset;cursor:pointer} th button:hover{color:var(--text)}
+th button[aria-sort]{color:var(--text)}
+td{padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:rgba(255,255,255,.015)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:9px;background:var(--faint);vertical-align:1px}
+.dot.running{background:var(--ok)} .dot.restarting,.dot.dead{background:var(--crit)} .dot.paused{background:var(--warn)}
+.sub{color:var(--faint);font-size:11.5px}
+.mini{display:inline-block;width:64px;height:5px;background:var(--panel2);border-radius:3px;margin-right:10px;vertical-align:2px;overflow:hidden}
+.mini i{display:block;height:100%;background:var(--sky);border-radius:3px}
+.mono{font-family:var(--mono);font-size:12.5px}
+.empty{padding:22px 16px;color:var(--muted);font-size:13px}
+.empty code{font-family:var(--mono);font-size:12px;color:var(--text);background:var(--panel2);padding:1px 5px;border-radius:4px}
+.hl-crit{color:var(--crit)} .hl-warn{color:var(--warn)}
+
+.log td:first-child{color:var(--faint)}
+.kind{font-size:11.5px;font-weight:600}
+.kind.raised.warning{color:var(--warn)} .kind.raised.critical{color:var(--crit)} .kind.resolved{color:var(--ok)}
+
+@media (max-width:1100px){
+  .drive>button{grid-template-columns:minmax(140px,1fr) minmax(180px,1.6fr) minmax(120px,1fr) 14px}
+  .drive .c-io,.drive .c-fore{display:none}
+}
+@media (max-width:900px){
+  :root{--top:auto}
+  .top{position:static;flex-wrap:wrap;height:auto;padding:10px 14px;gap:10px}
+  .brand{width:auto;flex:1 1 100%}
+  .spacer{display:none}
+  .hovertime{display:none}
+  .layout{display:block}
+  .side{position:sticky;top:0;height:auto;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:6px 10px;background:var(--bg);z-index:10}
+  .side a{white-space:nowrap}
+  .side a.on::before{display:none}
+  .facts{display:none}
+  main{padding:14px 12px 60px}
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .drive>button{grid-template-columns:minmax(0,1fr) 14px;gap:10px}
+  .drive .c-use{grid-column:1/-1;grid-row:2}
+  .drive .c-smart{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#18232F"/><path d="M5 18h5l3-8 5 14 3-6h6" fill="none" stroke="#35D0BA" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div style="min-width:0"><div class="host" id="host">Connecting</div><div class="hostsub" id="hostsub"></div></div>
+  </div>
+  <span class="conn" id="conn" data-s="connecting"><i></i><span>Connecting</span></span>
+  <span class="hovertime" id="hovertime" aria-live="off"></span>
+  <span class="spacer"></span>
+  <div class="seg" id="range" role="group" aria-label="Time range">
+    <button data-r="live" aria-pressed="true">Live</button>
+    <button data-r="1h" aria-pressed="false">1h</button>
+    <button data-r="6h" aria-pressed="false">6h</button>
+    <button data-r="24h" aria-pressed="false">24h</button>
+    <button data-r="7d" aria-pressed="false">7d</button>
+  </div>
+  <button class="btn" id="pause" aria-pressed="false">
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1.5" width="3" height="9" rx="1" fill="currentColor"/><rect x="7" y="1.5" width="3" height="9" rx="1" fill="currentColor"/></svg><span>Pause</span>
+  </button>
+</header>
+
+<div class="layout">
+  <nav class="side" id="side" aria-label="Sections">
+    <a href="#overview"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 11.5a5.5 5.5 0 1 1 11 0"/><path d="M8 11.5 10.5 7"/></svg>Overview</a>
+    <a href="#cpu"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="8" height="8" rx="1.5"/><path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2"/></svg>CPU</a>
+    <a href="#memory"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="4.5" width="13" height="7" rx="1"/><path d="M4.5 7v2M7 7v2M9.5 7v2M12 7v2M4 11.5V13M12 11.5V13"/></svg>Memory</a>
+    <a href="#storage"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>Storage<span class="badge" id="b-storage" hidden></span></a>
+    <a href="#network"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 2.5v10M2.5 10 5 12.5 7.5 10M11 13.5v-10M8.5 6 11 3.5 13.5 6"/></svg>Network</a>
+    <a href="#sensors" id="nav-sensors" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 9.3V3a1.5 1.5 0 0 1 3 0v6.3a3 3 0 1 1-3 0Z"/></svg>Sensors</a>
+    <a href="#containers"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m8 1.8 5.5 3v6.4L8 14.2l-5.5-3V4.8Z"/><path d="M2.7 4.9 8 7.8l5.3-2.9M8 7.8v6.3"/></svg>Containers<span class="badge" id="b-ctr" hidden></span></a>
+    <a href="#processes"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg>Processes</a>
+    <a href="#alerts"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2a4 4 0 0 1 4 4v3l1.5 2.5h-11L4 9V6a4 4 0 0 1 4-4ZM6.5 13.5a1.6 1.6 0 0 0 3 0"/></svg>Alerts<span class="badge" id="b-alerts" hidden></span></a>
+    <div class="facts" id="facts"></div>
+  </nav>
+
+  <main id="main">
+    <section id="overview">
+      <div class="gauges" id="gauges"></div>
+      <div class="strip" id="strip"></div>
+    </section>
+
+    <section id="cpu">
+      <div class="sh"><h2>CPU</h2><span class="note" id="cpu-note"></span></div>
+      <div class="grid" id="g-cpu"></div>
+      <div class="cores"><div class="ch"><div class="ct">Per thread<small>current usage</small></div></div><div class="corebars" id="cores"></div></div>
+    </section>
+
+    <section id="memory">
+      <div class="sh"><h2>Memory</h2><span class="note" id="mem-note"></span></div>
+      <div class="grid" id="g-mem"></div>
+    </section>
+
+    <section id="storage">
+      <div class="sh"><h2>Storage</h2><span class="note" id="storage-note"></span></div>
+      <div class="drives" id="drives"></div>
+      <div class="grid" id="g-disk"></div>
+    </section>
+
+    <section id="network">
+      <div class="sh"><h2>Network</h2><span class="note">Received above the line, sent below</span></div>
+      <div class="grid" id="g-net"></div>
+    </section>
+
+    <section id="sensors" hidden>
+      <div class="sh"><h2>Sensors</h2></div>
+      <div class="grid" id="g-temp"></div>
+    </section>
+
+    <section id="containers">
+      <div class="sh"><h2>Containers</h2><span class="note" id="ctr-note"></span></div>
+      <div class="tw" id="ctr-table"></div>
+      <div class="grid" id="g-ctr" style="margin-top:10px"></div>
+    </section>
+
+    <section id="processes">
+      <div class="sh"><h2>Processes</h2><span class="note" id="proc-note"></span></div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Process</th><th>User</th><th class="n">PID</th><th class="n">Threads</th>
+            <th class="n"><button data-sort="cpu" aria-sort="descending">CPU</button></th>
+            <th class="n"><button data-sort="mem">Memory</button></th></tr></thead>
+          <tbody id="procs"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="alerts">
+      <div class="sh"><h2>Alerts</h2><span class="note" id="alert-note"></span></div>
+      <div class="strip" id="alerts-active" style="margin-top:0"></div>
+      <div class="tw" style="margin-top:10px">
+        <table class="log"><thead><tr><th>When</th><th>Event</th><th>Alert</th><th>Details</th></tr></thead><tbody id="alog"></tbody></table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+'use strict';
+/* ---------------- constants & formatting ---------------- */
+const KiB = 1024, MiB = KiB * 1024, GiB = MiB * 1024, TiB = GiB * 1024;
+const COL = {teal:'#35D0BA', sky:'#4FA8FF', violet:'#A08CFF', amber:'#F5B942', rose:'#FF6F91', lime:'#A5D65C', slate:'#4E6175', orange:'#FF9955'};
+const PAL = [COL.teal, COL.sky, COL.violet, COL.amber, COL.rose, COL.lime, COL.orange, '#62E0E8', '#D58CFF', '#F7D774', '#7FC4FF', '#FFB3C7'];
+const SPANS = {'1h':3600, '6h':21600, '24h':86400, '7d':604800};
+const LIVE_WINDOW = 300;
+const FONT = '10.5px "IBM Plex Sans", system-ui, sans-serif';
+const VIRT = {none:'Bare metal', microsoft:'Hyper-V', kvm:'KVM', qemu:'QEMU', vmware:'VMware', oracle:'VirtualBox', xen:'Xen', lxc:'LXC container', docker:'Docker', wsl:'WSL', 'systemd-nspawn':'nspawn'};
+
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+function fmtBytes(v) {
+  if (v == null || !isFinite(v)) return '–';
+  v = Math.abs(v);
+  const u = ['B','KiB','MiB','GiB','TiB','PiB']; let i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  const d = i === 0 ? 0 : v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  return v.toFixed(d) + ' ' + u[i];
+}
+const fmtRate = v => v == null ? '–' : fmtBytes(v) + '/s';
+const fmtPct = v => v == null || !isFinite(v) ? '–' : (Math.abs(v) >= 10 ? v.toFixed(0) : v.toFixed(1)) + '%';
+const fmt2 = v => v == null ? '–' : v.toFixed(2);
+const fmtTemp = v => v == null ? '–' : Math.round(v) + '°C';
+function fmtDur(s) {
+  s = Math.max(0, s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+}
+function fmtAgo(ts) {
+  const s = Date.now() / 1000 - ts;
+  if (s < 90) return 'just now';
+  return fmtDur(s) + ' ago';
+}
+const pad2 = n => String(n).padStart(2, '0');
+function fmtClock(t, secs = true) { const d = new Date(t * 1000); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + (secs ? ':' + pad2(d.getSeconds()) : ''); }
+function fmtWhen(t) {
+  const d = new Date(t * 1000), today = new Date();
+  const same = d.toDateString() === today.toDateString();
+  return (same ? '' : d.toLocaleDateString(undefined, {month:'short', day:'numeric'}) + ', ') + fmtClock(t, false);
+}
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; }
+function heat(p) { return p < 50 ? COL.teal : p < 75 ? '#7FD68A' : p < 90 ? COL.amber : '#FF5A5F'; }
+function level(p, w = 85, c = 95) { return p >= c ? 'crit' : p >= w ? 'warn' : ''; }
+
+/* ---------------- time-series store ---------------- */
+class Series {
+  constructor(max = 0) { this.t = []; this.v = new Map(); this.max = max; }
+  push(t, s) {
+    const n = this.t.length;
+    if (n && t <= this.t[n - 1]) return false;
+    this.t.push(t);
+    for (const k in s) { let a = this.v.get(k); if (!a) { a = new Array(n).fill(null); this.v.set(k, a); } a.push(s[k]); }
+    for (const a of this.v.values()) if (a.length < n + 1) a.push(null);
+    if (this.max && this.t.length > this.max) { const d = this.t.length - this.max; this.t.splice(0, d); for (const a of this.v.values()) a.splice(0, d); }
+    return true;
+  }
+  static from(points) { const s = new Series(); for (const p of points) s.push(p.t, p.s); return s; }
+}
+function lowerBound(a, x) { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < x) lo = m + 1; else hi = m; } return lo; }
+
+const live = new Series(1900);
+const view = {
+  mode: 'live', series: live, paused: false, frozen: null, t0: 0, t1: 0, gap: 12,
+  range() {
+    if (this.mode === 'live') {
+      const T = live.t; const t1 = this.paused && this.frozen ? this.frozen : (T.length ? T[T.length - 1] : Date.now() / 1000);
+      return [t1 - LIVE_WINDOW, t1];
+    }
+    return [this.t0, this.t1];
+  }
+};
+
+/* ---------------- chart engine ---------------- */
+const charts = [];
+let hoverT = null, drawQueued = false;
+function requestDraw() {
+  if (drawQueued) return; drawQueued = true;
+  requestAnimationFrame(() => { drawQueued = false; for (const c of charts) if (c.visible && c.el.isConnected) c.draw(); });
+}
+function setHover(t) {
+  hoverT = t;
+  $('#hovertime').textContent = t == null ? '' : (view.mode === 'hist' && SPANS[view.r] > 86400 ? fmtWhen(t) : fmtClock(t));
+  requestDraw();
+}
+const visIO = new IntersectionObserver(es => { for (const e of es) { const c = e.target._chart; if (c) { c.visible = e.isIntersecting; if (c.visible) requestDraw(); } } }, {rootMargin: '120px'});
+const sizeRO = new ResizeObserver(es => { for (const e of es) { const c = e.target._chart; if (c) c.resize(); } requestDraw(); });
+
+function niceDec(x) { const e = Math.pow(10, Math.floor(Math.log10(x))); const f = x / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e; }
+function niceStep(raw, binary) {
+  if (!(raw > 0)) return 1;
+  if (binary && raw >= 1024) { const p = Math.pow(1024, Math.floor(Math.log(raw) / Math.log(1024))); const r = niceDec(raw / p); return r >= 1000 ? p * 1024 : p * r; }
+  return niceDec(raw);
+}
+function niceMax(v, binary) { if (!(v > 0)) return binary ? 1024 : 1; const st = niceStep(v / 4, binary); return Math.ceil(v * 1.04 / st) * st; }
+const TSTEPS = [5,10,15,30,60,120,300,600,900,1800,3600,7200,10800,21600,43200,86400];
+
+class Chart {
+  constructor(parent, cfg) {
+    this.cfg = Object.assign({h: 150, fmt: v => v.toFixed(1), axis: null}, cfg);
+    this.cfg.axis = this.cfg.axis || this.cfg.fmt;
+    const el = this.el = document.createElement('div');
+    el.className = 'chart' + (cfg.wide ? ' wide' : '');
+    el.innerHTML = `<div class="ch"><div class="ct">${esc(cfg.title)}${cfg.sub ? `<small>${esc(cfg.sub)}</small>` : ''}</div><div class="lg"></div></div><div class="cv"><canvas role="img" aria-label="${esc(cfg.title)} chart"></canvas></div>`;
+    parent.appendChild(el);
+    this.canvas = $('canvas', el); this.ctx = this.canvas.getContext('2d'); this.lgEl = $('.lg', el);
+    this.visible = true; el._chart = this; this.canvas.parentElement._chart = this;
+    this.setDims(this.cfg.dims);
+    const pos = e => { const r = this.canvas.getBoundingClientRect(); const [t0, t1] = view.range(); const pw = this.w - 56; const x = e.clientX - r.left; return x > pw ? null : t0 + x / pw * (t1 - t0); };
+    this.canvas.addEventListener('pointermove', e => setHover(pos(e)));
+    this.canvas.addEventListener('pointerleave', () => setHover(null));
+    visIO.observe(el); sizeRO.observe(this.canvas.parentElement);
+    charts.push(this); this.resize();
+  }
+  setDims(dims) {
+    const hidden = new Set((this.cfg.dims || []).filter(d => d.hidden).map(d => d.key));
+    this.cfg.dims = dims.map(d => Object.assign({}, d, {hidden: hidden.has(d.key)}));
+    this.lgEl.innerHTML = '';
+    this.lv = this.cfg.dims.map(d => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = d.hidden ? 'off' : '';
+      b.title = 'Show or hide ' + d.name;
+      b.innerHTML = `<i style="background:${d.color}"></i><span>${esc(d.name)}</span><b>–</b>`;
+      b.onclick = () => { d.hidden = !d.hidden; b.classList.toggle('off', d.hidden); requestDraw(); };
+      this.lgEl.appendChild(b); return $('b', b);
+    });
+  }
+  resize() {
+    const w = this.canvas.parentElement.clientWidth; if (!w) return;
+    const dpr = window.devicePixelRatio || 1; this.w = w; this.h = this.cfg.h; this.dpr = dpr;
+    this.canvas.width = Math.round(w * dpr); this.canvas.height = Math.round(this.h * dpr); this.canvas.style.height = this.h + 'px';
+  }
+  draw() {
+    if (!this.w) this.resize(); if (!this.w) return;
+    const {ctx, w, h, cfg} = this; ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    const S = view.series, T = S.t, [t0, t1] = view.range();
+    const padR = 56, padT = 6, padB = 18, pw = w - padR, ph = h - padT - padB;
+    const i0 = Math.max(0, lowerBound(T, t0) - 1), i1 = Math.min(T.length, lowerBound(T, t1) + 1), n = Math.max(0, i1 - i0);
+    const dims = cfg.dims, tops = [], bots = [];
+    const pos = new Float64Array(n), neg = new Float64Array(n);
+    let vmax = 0, vmin = 0, any = false;
+    for (const d of dims) {
+      const a = S.v.get(d.key), top = new Array(n), bot = new Array(n);
+      for (let j = 0; j < n; j++) {
+        let v = a ? a[i0 + j] : null;
+        if (v == null || d.hidden) { top[j] = bot[j] = null; continue; }
+        v *= d.scale || 1; any = true;
+        if (d.neg) { v = -Math.abs(v); if (cfg.stacked) { bot[j] = neg[j]; neg[j] += v; top[j] = neg[j]; } else { bot[j] = 0; top[j] = v; } if (top[j] < vmin) vmin = top[j]; }
+        else { if (cfg.stacked) { bot[j] = pos[j]; pos[j] += v; top[j] = pos[j]; } else { bot[j] = 0; top[j] = v; } if (top[j] > vmax) vmax = top[j]; }
+      }
+      tops.push(top); bots.push(bot);
+    }
+    const fixedMax = typeof cfg.max === 'function' ? cfg.max() : cfg.max;
+    const yMax = fixedMax != null ? fixedMax : niceMax(vmax, cfg.binary);
+    let yMin = cfg.min != null ? cfg.min : vmin < 0 ? -niceMax(-vmin, cfg.binary) : 0;
+    if (cfg.autoMin && any) {
+      let lo = Infinity; for (const top of tops) for (const v of top) if (v != null && v < lo) lo = v;
+      const st0 = niceStep(Math.max(yMax - lo, 1) / 4); yMin = Math.max(0, Math.floor((lo - st0 * .5) / st0) * st0);
+    }
+    const X = t => (t - t0) / (t1 - t0) * pw, Y = v => padT + (yMax - v) / (yMax - yMin) * ph;
+
+    // grid
+    ctx.font = FONT; ctx.textBaseline = 'middle'; ctx.lineWidth = 1;
+    const st = niceStep((yMax - yMin) / 4, cfg.binary);
+    for (let v = Math.ceil(yMin / st) * st; v <= yMax + st * 1e-6; v += st) {
+      const y = Math.round(Y(v)) + .5;
+      ctx.strokeStyle = Math.abs(v) < st * 1e-6 && yMin < 0 ? 'rgba(141,160,182,.38)' : 'rgba(141,160,182,.09)';
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(pw, y); ctx.stroke();
+      ctx.fillStyle = '#5E7084'; ctx.fillText(cfg.axis(Math.abs(v)), pw + 7, clamp(y, padT + 5, padT + ph - 2));
+    }
+    const span = t1 - t0, want = Math.max(2, pw / 115);
+    const step = TSTEPS.find(s => span / s <= want) || 86400;
+    const off = new Date().getTimezoneOffset() * 60;
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
+    for (let t = Math.ceil((t0 - off) / step) * step + off; t <= t1; t += step) {
+      const x = Math.round(X(t)) + .5; if (x < 18 || x > pw - 18) continue;
+      ctx.strokeStyle = 'rgba(141,160,182,.06)'; ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + ph); ctx.stroke();
+      const d = new Date(t * 1000);
+      const lab = step >= 86400 ? d.toLocaleDateString(undefined, {weekday:'short', day:'numeric'}) : fmtClock(t, step < 60);
+      ctx.fillStyle = '#5E7084'; ctx.fillText(lab, x, h - 4);
+    }
+    ctx.textAlign = 'left';
+    if (!any) { ctx.fillStyle = '#5E7084'; ctx.textBaseline = 'middle'; ctx.textAlign = 'center'; ctx.fillText(n ? 'No data in this range' : 'Waiting for data', pw / 2, padT + ph / 2); ctx.textAlign = 'left'; }
+
+    // series
+    ctx.save(); ctx.beginPath(); ctx.rect(0, padT - 1, pw, ph + 2); ctx.clip();
+    const gap = view.mode === 'live' ? 12 : view.gap;
+    for (let di = 0; di < dims.length; di++) {
+      const d = dims[di], top = tops[di], bot = bots[di]; if (d.hidden) continue;
+      let fill;
+      if (cfg.stacked) fill = hexA(d.color, .30);
+      else { const g = d.neg ? ctx.createLinearGradient(0, Y(0), 0, padT + ph) : ctx.createLinearGradient(0, padT, 0, Y(0)); g.addColorStop(d.neg ? 1 : 0, hexA(d.color, .30)); g.addColorStop(d.neg ? 0 : 1, hexA(d.color, .02)); fill = g; }
+      let seg = [];
+      const flush = () => {
+        if (!seg.length) return;
+        ctx.beginPath();
+        seg.forEach((j, k) => { const x = X(T[i0 + j]), y = Y(top[j]); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+        if (seg.length === 1) ctx.lineTo(X(T[i0 + seg[0]]) + 2, Y(top[seg[0]]));
+        for (let k = seg.length - 1; k >= 0; k--) ctx.lineTo(X(T[i0 + seg[k]]) + (seg.length === 1 ? 2 : 0), Y(bot[seg[k]]));
+        ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+        ctx.beginPath();
+        seg.forEach((j, k) => { const x = X(T[i0 + j]), y = Y(top[j]); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+        ctx.strokeStyle = d.color; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke();
+        seg = [];
+      };
+      for (let j = 0; j < n; j++) {
+        if (top[j] == null) { flush(); continue; }
+        if (seg.length && T[i0 + j] - T[i0 + seg[seg.length - 1]] > gap) flush();
+        seg.push(j);
+      }
+      flush();
+    }
+    ctx.restore();
+
+    // crosshair + legend
+    let idx = -1;
+    if (hoverT != null && hoverT >= t0 && hoverT <= t1 && n) {
+      const k = clamp(lowerBound(T, hoverT), i0, i1 - 1);
+      idx = (k > i0 && Math.abs(T[k - 1] - hoverT) < Math.abs(T[k] - hoverT)) ? k - 1 : k;
+      const x = Math.round(X(T[idx])) + .5;
+      ctx.strokeStyle = 'rgba(220,228,236,.45)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + ph); ctx.stroke();
+      dims.forEach((d, di) => { const v = tops[di][idx - i0]; if (v == null || d.hidden) return; ctx.beginPath(); ctx.arc(x, Y(v), 3.2, 0, 7); ctx.fillStyle = d.color; ctx.fill(); ctx.strokeStyle = '#131C26'; ctx.lineWidth = 1.5; ctx.stroke(); });
+    }
+    if (idx < 0) { idx = i1 - 1; }
+    dims.forEach((d, i) => {
+      const a = S.v.get(d.key); let v = a && idx >= 0 ? a[idx] : null;
+      if (v == null && a && idx === i1 - 1) for (let k = idx - 1; k >= Math.max(0, idx - 4); k--) if (a[k] != null) { v = a[k]; break; }
+      this.lv[i].textContent = v == null ? '–' : cfg.fmt(Math.abs(v * (d.scale || 1)));
+    });
+  }
+}
+
+/* ---------------- app state ---------------- */
+let info = null, mode = 'server', demo = null, lastS = {}, lastState = null, procSort = 'cpu';
+const openDrives = new Set();
+const driveRows = new Map();
+const built = {base: false, net: new Set(), disk: new Set(), util: null, temp: null, ctrCpu: null, ctrMem: null, keys: 0};
+
+function ensureCharts() {
+  if (!built.base) {
+    built.base = true;
+    new Chart($('#g-cpu'), {title: 'Utilization', sub: 'all threads', wide: true, h: 190, stacked: true, max: 100, fmt: fmtPct, axis: v => v + '%', dims: [
+      {key:'cpu:user', name:'user', color:COL.teal}, {key:'cpu:system', name:'system', color:COL.sky},
+      {key:'cpu:iowait', name:'iowait', color:COL.amber}, {key:'cpu:irq', name:'irq', color:COL.violet},
+      {key:'cpu:nice', name:'nice', color:COL.lime}, {key:'cpu:steal', name:'steal', color:COL.rose}]});
+    new Chart($('#g-cpu'), {title: 'Load average', sub: 'runnable tasks', fmt: fmt2, axis: v => +v.toFixed(2) + '', dims: [
+      {key:'load:1', name:'1 min', color:COL.teal}, {key:'load:5', name:'5 min', color:COL.sky}, {key:'load:15', name:'15 min', color:COL.violet}]});
+    new Chart($('#g-cpu'), {title: 'Total usage', sub: 'busy time', max: 100, fmt: fmtPct, axis: v => v + '%', dims: [{key:'cpu:total', name:'busy', color:COL.teal}]});
+    new Chart($('#g-mem'), {title: 'RAM', sub: 'where memory is going', stacked: true, binary: true, h: 170, wide: false, max: () => info.mem_total, fmt: fmtBytes, dims: [
+      {key:'mem:used', name:'used', color:COL.teal}, {key:'mem:buffers', name:'buffers', color:COL.violet},
+      {key:'mem:cached', name:'cached', color:COL.sky}, {key:'mem:free', name:'free', color:COL.slate}]});
+    new Chart($('#g-mem'), {title: 'Swap', stacked: true, binary: true, h: 170, max: () => Math.max(lastS['swap:total'] || info.swap_total || 0, 1), fmt: fmtBytes, dims: [
+      {key:'swap:used', name:'used', color:COL.rose}, {key:'swap:free', name:'free', color:COL.slate}]});
+  }
+  const S = live; if (S.v.size === built.keys) return; built.keys = S.v.size;
+  const keys = [...S.v.keys()];
+  for (const k of keys) {
+    let m;
+    if ((m = k.match(/^net:(.+):rx$/)) && m[1] !== 'total' && !built.net.has(m[1])) {
+      built.net.add(m[1]);
+      new Chart($('#g-net'), {title: m[1], sub: 'interface traffic', binary: true, fmt: fmtRate, axis: fmtBytes, dims: [
+        {key:`net:${m[1]}:rx`, name:'received', color:COL.teal}, {key:`net:${m[1]}:tx`, name:'sent', color:COL.violet, neg:true}]});
+    }
+    if ((m = k.match(/^disk:(.+):r$/)) && m[1] !== 'total' && !built.disk.has(m[1])) {
+      built.disk.add(m[1]);
+      new Chart($('#g-disk'), {title: m[1], sub: 'read above, write below', binary: true, fmt: fmtRate, axis: fmtBytes, dims: [
+        {key:`disk:${m[1]}:r`, name:'read', color:COL.teal}, {key:`disk:${m[1]}:w`, name:'write', color:COL.amber, neg:true}]});
+    }
+  }
+  const utilKeys = keys.filter(k => /^disk:.+:util$/.test(k));
+  if (utilKeys.length) {
+    const dims = utilKeys.map((k, i) => ({key: k, name: k.split(':')[1], color: PAL[i % PAL.length]}));
+    if (!built.util) built.util = new Chart($('#g-disk'), {title: 'Disk busy time', sub: 'share of time servicing I/O', max: 100, fmt: fmtPct, axis: v => v + '%', dims});
+    else if (built.util.cfg.dims.length !== dims.length) built.util.setDims(dims);
+  }
+  const tempKeys = keys.filter(k => k.startsWith('temp:'));
+  if (tempKeys.length) {
+    $('#sensors').hidden = false; $('#nav-sensors').hidden = false;
+    const dims = tempKeys.map((k, i) => ({key: k, name: k.slice(5), color: PAL[i % PAL.length]}));
+    if (!built.temp) built.temp = new Chart($('#g-temp'), {title: 'Temperatures', wide: true, h: 170, autoMin: true, fmt: fmtTemp, axis: v => v + '°', dims});
+    else if (built.temp.cfg.dims.length !== dims.length) built.temp.setDims(dims);
+  }
+  const cKeys = keys.filter(k => /^ctr:.+:cpu$/.test(k)).map(k => k.slice(4, -4)).sort();
+  if (cKeys.length) {
+    const cpuDims = cKeys.map((n, i) => ({key:`ctr:${n}:cpu`, name:n, color:PAL[i % PAL.length]}));
+    const memDims = cKeys.map((n, i) => ({key:`ctr:${n}:mem`, name:n, color:PAL[i % PAL.length]}));
+    if (!built.ctrCpu) {
+      built.ctrCpu = new Chart($('#g-ctr'), {title: 'Container CPU', sub: '100% = one thread', stacked: true, fmt: fmtPct, axis: v => v + '%', dims: cpuDims});
+      built.ctrMem = new Chart($('#g-ctr'), {title: 'Container memory', stacked: true, binary: true, fmt: fmtBytes, dims: memDims});
+    } else if (built.ctrCpu.cfg.dims.length !== cpuDims.length) { built.ctrCpu.setDims(cpuDims); built.ctrMem.setDims(memDims); }
+  }
+}
+
+/* ---------------- gauges ---------------- */
+const R = 46, CIRC = 2 * Math.PI * R, ARC = CIRC * .75;
+function peak(key, floor) { const a = live.v.get(key); if (!a) return floor; let m = floor; for (let i = Math.max(0, a.length - 150); i < a.length; i++) if (a[i] > m) m = a[i]; return m; }
+function sumPeak(k1, k2, floor) { const a = live.v.get(k1), b = live.v.get(k2); if (!a || !b) return floor; let m = floor; for (let i = Math.max(0, a.length - 150); i < a.length; i++) m = Math.max(m, (a[i] || 0) + (b[i] || 0)); return m; }
+const splitUnit = s => { const i = s.indexOf(' '); return i < 0 ? [s, ''] : [s.slice(0, i), s.slice(i + 1)]; };
+const GAUGES = [
+  {id:'cpu', label:'CPU', get: s => ({v: s['cpu:total'], max: 100, num: Math.round(s['cpu:total'] ?? 0), unit: '%', sub: `${info.cores} threads`})},
+  {id:'load', label:'Load', get: s => ({v: s['load:1'], max: info.cores, num: fmt2(s['load:1']), unit: '1 min', sub: `5m ${fmt2(s['load:5'])}  15m ${fmt2(s['load:15'])}`})},
+  {id:'ram', label:'RAM', get: s => ({v: s['mem:pct'], max: 100, num: Math.round(s['mem:pct'] ?? 0), unit: '%', sub: `${fmtBytes(s['mem:used'])} of ${fmtBytes(info.mem_total)}`})},
+  {id:'swap', label:'Swap', get: s => { const t = s['swap:total'] ?? info.swap_total; return t ? {v: s['swap:pct'], max: 100, num: Math.round(s['swap:pct'] ?? 0), unit: '%', sub: `${fmtBytes(s['swap:used'])} of ${fmtBytes(t)}`} : {v: 0, max: 100, num: '–', unit: 'none', sub: 'No swap configured'}; }},
+  {id:'disk', label:'Disk I/O', rate: true, get: s => { const v = (s['disk:total:r'] || 0) + (s['disk:total:w'] || 0); const [n, u] = splitUnit(fmtRate(v)); return {v, max: sumPeak('disk:total:r', 'disk:total:w', 8 * MiB), num: n, unit: u, sub: `R ${fmtRate(s['disk:total:r'])}  W ${fmtRate(s['disk:total:w'])}`}; }},
+  {id:'net', label:'Network', rate: true, get: s => { const v = (s['net:total:rx'] || 0) + (s['net:total:tx'] || 0); const [n, u] = splitUnit(fmtRate(v)); return {v, max: sumPeak('net:total:rx', 'net:total:tx', 2 * MiB), num: n, unit: u, sub: `In ${fmtRate(s['net:total:rx'])}  Out ${fmtRate(s['net:total:tx'])}`}; }},
+  {id:'temp', label:'Hottest sensor', get: s => { let best = null; for (const k in s) if (k.startsWith('temp:') && (best == null || s[k] > s[best])) best = k; return best ? {v: s[best], max: 100, num: Math.round(s[best]), unit: '°C', sub: best.slice(5), th: [.75, .88]} : {v: 0, max: 100, num: '–', unit: '°C', sub: 'No sensors found'}; }},
+  {id:'store', label:'Fullest drive', get: (s, st) => { const ds = (st?.drives || []).filter(d => d.pct != null); if (!ds.length) return {v: 0, max: 100, num: '–', unit: '%', sub: ''}; const d = ds.reduce((a, b) => b.pct > a.pct ? b : a); return {v: d.pct, max: 100, num: Math.round(d.pct), unit: '%', sub: d.mount, th: [.85, .95]}; }},
+];
+function buildGauges() {
+  $('#gauges').innerHTML = GAUGES.map(g => `<div class="gauge" id="g_${g.id}">
+    <svg viewBox="0 0 120 108" aria-hidden="true"><circle class="trk" cx="60" cy="58" r="${R}" stroke-dasharray="${ARC} ${CIRC}" transform="rotate(135 60 58)"/><circle class="val" cx="60" cy="58" r="${R}" stroke-dasharray="0 ${CIRC}" transform="rotate(135 60 58)"/></svg>
+    <div class="gnum"><b>–</b><span></span></div><div class="glabel">${esc(g.label)}</div><div class="gsub"></div></div>`).join('');
+}
+function renderGauges(s, st) {
+  for (const g of GAUGES) {
+    const el = $('#g_' + g.id); const r = g.get(s, st); const f = clamp((r.v || 0) / (r.max || 1), 0, 1);
+    const th = r.th || [.7, .9];
+    const color = g.rate ? COL.sky : f >= th[1] ? '#FF5A5F' : f >= th[0] ? COL.amber : COL.teal;
+    const c = $('.val', el); c.setAttribute('stroke-dasharray', `${Math.max(.001, ARC * f)} ${CIRC}`); c.style.stroke = color;
+    $('.gnum b', el).textContent = r.num; $('.gnum span', el).textContent = r.unit; $('.gsub', el).textContent = r.sub;
+    el.title = `${g.label}: ${r.num} ${r.unit}`;
+  }
+}
+
+/* ---------------- widgets ---------------- */
+function renderCores(s) {
+  const el = $('#cores'); const n = info.cores;
+  if (el.children.length !== n) el.innerHTML = Array.from({length: n}, () => '<div class="core"><i></i></div>').join('');
+  for (let i = 0; i < n; i++) { const v = s['core:' + i] ?? 0; const c = el.children[i]; c.title = `Thread ${i}: ${fmtPct(v)}`; const b = c.firstChild; b.style.height = clamp(v, 0, 100) + '%'; b.style.background = heat(v); }
+}
+
+function smartHTML(d, smartAvailable) {
+  if (d.network) return '<span class="smart na"><i></i>Network share</span>';
+  const sm = d.smart;
+  if (!sm) return `<span class="smart na" title="${smartAvailable ? 'No SMART data for this device yet' : 'Install smartmontools to read drive health'}"><i></i>${smartAvailable ? 'No SMART data' : 'smartctl missing'}</span>`;
+  if (sm.status === 'unavailable') return `<span class="smart na" title="${esc(sm.reason || '')}"><i></i>No SMART</span>`;
+  const t = sm.temp != null ? ` ${Math.round(sm.temp)}°C` : '';
+  const detail = [sm.model, sm.hours != null ? `${sm.hours.toLocaleString()} power-on hours` : '', sm.reallocated != null ? `${sm.reallocated} reallocated` : '', sm.pending != null ? `${sm.pending} pending` : '', sm.wear != null ? `${sm.wear}% life used` : ''].filter(Boolean).join('\n');
+  const label = {ok: 'Healthy', warning: 'Check drive', failed: 'Failing'}[sm.status] || sm.status;
+  return `<span class="smart ${sm.status}" title="${esc(detail)}"><i></i>${label}${t}</span>`;
+}
+function foreText(d) {
+  const x = d.days_to_full;
+  if (d.pct == null) return '–';
+  if (x == null) return '<span class="sub">Needs 6h of history</span>';
+  if (x < 0) return 'Not growing';
+  if (x < 1) return '<span class="hl-crit">Full within a day</span>';
+  if (x > 365) return 'Over a year';
+  return `<span class="${x < 14 ? 'hl-crit' : x < 45 ? 'hl-warn' : ''}">About ${Math.round(x)} days</span>`;
+}
+function renderDrives(st) {
+  const host = $('#drives'); const drives = st.drives || []; const seen = new Set();
+  let flagged = 0;
+  for (const d of drives) {
+    seen.add(d.mount);
+    let row = driveRows.get(d.mount);
+    if (!row) {
+      const el = document.createElement('div'); el.className = 'drive';
+      el.innerHTML = `<button type="button" aria-expanded="false"><div class="c-name"><div class="dname"></div><div class="dmeta"></div></div><div class="c-use"></div><div class="c-io kv"></div><div class="c-smart kv"></div><div class="c-fore kv"></div><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m6 3.5 4.5 4.5L6 12.5"/></svg></button><div class="dexp" hidden></div>`;
+      const btn = $('button', el), exp = $('.dexp', el);
+      btn.onclick = () => {
+        const open = !openDrives.has(d.mount); open ? openDrives.add(d.mount) : openDrives.delete(d.mount);
+        el.classList.toggle('open', open); btn.setAttribute('aria-expanded', open); exp.hidden = !open;
+        if (open && !row.chart) row.chart = new Chart(exp, {title: 'Space used over time', sub: 'switch to 7d to see the trend', max: 100, autoMin: true, h: 130, fmt: fmtPct, axis: v => v + '%', dims: [{key: `drive:${d.mount}:pct`, name: 'used', color: COL.teal}]});
+        requestDraw();
+      };
+      row = {el, chart: null}; driveRows.set(d.mount, row);
+    }
+    host.appendChild(row.el);
+    const e = row.el;
+    $('.dname', e).textContent = d.mount; $('.dname', e).title = d.mount;
+    $('.dmeta', e).innerHTML = `<span class="dev" title="${esc(d.device)}">${esc(d.device)}</span><span class="tag">${esc(d.fs)}</span>${d.network ? '<span class="tag net">network</span>' : ''}${d.readonly ? '<span class="tag ro">read-only</span>' : ''}`;
+    if (d.status !== 'ok') {
+      $('.c-use', e).innerHTML = `<div class="dstatus">${d.status === 'unresponsive' ? 'Not responding. Reads are timing out.' : esc(d.error || 'Could not read this mount')}</div>`;
+      flagged++;
+    } else {
+      const lv = level(d.pct);
+      if (lv) flagged++;
+      $('.c-use', e).innerHTML = `<div class="urow"><span>${fmtBytes(d.used)} used</span><b class="${lv ? 'hl-' + lv : ''}">${fmtPct(d.pct)}</b></div><div class="bar"><i class="${lv}" style="width:${clamp(d.pct, 0, 100)}%"></i></div><div class="usub"><span>${fmtBytes(d.free)} free of ${fmtBytes(d.total)}</span>${d.inodes_pct != null ? `<span title="Share of file slots (inodes) in use">inodes ${fmtPct(d.inodes_pct)}</span>` : ''}</div>`;
+    }
+    const r = d.disk ? lastS[`disk:${d.disk}:r`] : null, w = d.disk ? lastS[`disk:${d.disk}:w`] : null;
+    $('.c-io', e).innerHTML = d.disk ? `<span>Read <b>${fmtRate(r)}</b></span><span>Write <b>${fmtRate(w)}</b></span>` : '<span class="sub">No block device stats</span>';
+    $('.c-smart', e).innerHTML = `<span class="sub">Health${d.disk ? ' of ' + esc(d.disk) : ''}</span>${smartHTML(d, st.smart_available)}`;
+    if (d.smart && (d.smart.status === 'warning' || d.smart.status === 'failed')) flagged++;
+    $('.c-fore', e).innerHTML = `<span class="sub">Full in</span><b>${foreText(d)}</b>`;
+  }
+  for (const [m, row] of driveRows) if (!seen.has(m)) { row.el.remove(); driveRows.delete(m); }
+  const b = $('#b-storage'); b.hidden = !flagged; b.textContent = flagged;
+  const total = drives.reduce((a, d) => a + (d.total || 0), 0), used = drives.reduce((a, d) => a + (d.used || 0), 0);
+  $('#storage-note').textContent = `${drives.length} mounts, ${fmtBytes(used)} used of ${fmtBytes(total)}`;
+}
+
+function renderContainers(st) {
+  const el = $('#ctr-table'); const cs = st.containers || [];
+  if (!st.docker?.available && !cs.length) {
+    el.innerHTML = `<div class="empty">Docker isn't reachable${st.docker?.error ? ` (${esc(st.docker.error)})` : ''}. The monitor reads <code>/var/run/docker.sock</code>, so run it as root or add its user to the <code>docker</code> group.</div>`;
+    $('#ctr-note').textContent = ''; $('#b-ctr').hidden = true; return;
+  }
+  if (!cs.length) { el.innerHTML = '<div class="empty">No containers on this host yet.</div>'; return; }
+  const running = cs.filter(c => c.state === 'running').length;
+  $('#ctr-note').textContent = `${running} running, ${cs.length - running} stopped`;
+  const bad = cs.filter(c => c.state === 'restarting' || c.health === 'unhealthy' || (c.state === 'exited' && c.exit_code)).length;
+  $('#b-ctr').hidden = !bad; $('#b-ctr').textContent = bad; $('#b-ctr').className = 'badge crit';
+  el.innerHTML = `<table><thead><tr><th>Container</th><th>State</th><th class="n">CPU</th><th class="n">Memory</th><th class="n">Restarts</th><th>Health</th></tr></thead><tbody>${cs.map(c => {
+    const memPct = c.mem != null && c.mem_limit ? c.mem / c.mem_limit * 100 : 0;
+    const health = c.health ? `<span class="${c.health === 'unhealthy' ? 'hl-crit' : c.health === 'starting' ? 'hl-warn' : ''}">${esc(c.health)}</span>` : '<span class="sub">no check</span>';
+    return `<tr><td><span class="dot ${esc(c.state)}"></span>${esc(c.name)} <span class="sub">${esc(c.image)}</span></td>
+      <td class="${c.state === 'restarting' || (c.state === 'exited' && c.exit_code) ? 'hl-crit' : c.state === 'running' ? '' : 'sub'}">${esc(c.status)}</td>
+      <td class="n">${c.cpu != null ? `<span class="mini"><i style="width:${clamp(c.cpu / info.cores, 0, 100)}%"></i></span>${fmtPct(c.cpu)}` : '<span class="sub">–</span>'}</td>
+      <td class="n">${c.mem != null ? `<span class="mini"><i style="width:${clamp(memPct, 0, 100)}%;background:${COL.violet}"></i></span>${fmtBytes(c.mem)}` : '<span class="sub">–</span>'}</td>
+      <td class="n ${c.restarts > 3 ? 'hl-warn' : ''}">${c.restarts}</td><td>${health}</td></tr>`; }).join('')}</tbody></table>`;
+}
+
+function renderProcs(st) {
+  const ps = [...(st.processes || [])].sort((a, b) => b[procSort] - a[procSort]).slice(0, 14);
+  $('#proc-note').textContent = `${st.process_count} processes, top by ${procSort === 'cpu' ? 'CPU' : 'memory'}`;
+  $('#procs').innerHTML = ps.map(p => `<tr><td>${esc(p.name)}</td><td class="sub">${esc(p.user)}</td><td class="n sub">${p.pid}</td><td class="n sub">${p.threads}</td>
+    <td class="n"><span class="mini"><i style="width:${clamp(p.cpu / info.cores, 0, 100)}%"></i></span>${fmtPct(p.cpu)}</td>
+    <td class="n"><span class="mini"><i style="width:${clamp(p.mem / info.mem_total * 100, 0, 100)}%;background:${COL.violet}"></i></span>${fmtBytes(p.mem)}</td></tr>`).join('');
+}
+
+function alertRow(a) {
+  return `<div class="al ${a.severity}"><span class="sev">${a.severity === 'critical' ? 'Critical' : 'Warning'}</span><div><div class="tt">${esc(a.title)}</div><div class="dd">${esc(a.detail)}</div></div><time title="${new Date(a.since * 1000).toLocaleString()}">since ${fmtAgo(a.since)}</time></div>`;
+}
+function renderAlerts(st) {
+  const A = st.alerts || {active: [], log: []}; const act = A.active;
+  const html = act.length ? act.map(alertRow).join('') : '<div class="okline"><i></i>All checks passing. Alerts appear here when a threshold is crossed.</div>';
+  $('#strip').innerHTML = html; $('#alerts-active').innerHTML = html;
+  const b = $('#b-alerts'); b.hidden = !act.length; b.textContent = act.length; b.className = 'badge' + (act.some(a => a.severity === 'critical') ? ' crit' : '');
+  $('#alert-note').textContent = act.length ? `${act.length} active` : 'None active';
+  $('#alog').innerHTML = A.log.length ? A.log.map(e => `<tr><td>${fmtWhen(e.ts)}</td><td><span class="kind ${e.kind} ${e.severity}">${e.kind === 'resolved' ? 'Resolved' : e.severity === 'critical' ? 'Critical' : 'Warning'}</span></td><td>${esc(e.title)}</td><td class="sub">${esc(e.detail)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="empty">No alert history yet.</td></tr>';
+}
+
+function renderInfo() {
+  $('#host').textContent = info.hostname; document.title = info.hostname + ' · Server Monitor';
+  $('#hostsub').textContent = `${info.os}, kernel ${info.kernel}`;
+  const facts = [['Processor', info.cpu_model || info.arch], ['Threads', `${info.cores}${info.physical_cores ? ` on ${info.physical_cores} cores` : ''}`], ['Memory', fmtBytes(info.mem_total)], ['Platform', VIRT[info.virt] || info.virt], ['Up for', `<span id="uptime">${fmtDur(Date.now() / 1000 - info.boot_time)}</span>`]];
+  $('#facts').innerHTML = facts.map(([k, v]) => `<div><span>${k}</span><b>${k === 'Up for' ? v : esc(v)}</b></div>`).join('');
+  $('#cpu-note').textContent = info.cpu_model || '';
+  $('#mem-note').textContent = `${fmtBytes(info.mem_total)} installed`;
+}
+
+/* ---------------- data flow ---------------- */
+function onSample(m) {
+  live.push(m.t, m.s);
+  lastS = m.s; lastState = m.state;
+  if (view.paused) return;
+  ensureCharts();
+  renderGauges(m.s, m.state); renderCores(m.s);
+  if (m.state) { renderDrives(m.state); renderContainers(m.state); renderProcs(m.state); renderAlerts(m.state); }
+  const up = $('#uptime'); if (up && m.state?.uptime) up.textContent = fmtDur(m.state.uptime);
+  requestDraw();
+}
+function setConn(s) {
+  const el = $('#conn'); el.dataset.s = s;
+  const txt = {live: 'Live', reconnecting: 'Reconnecting', paused: 'Paused', demo: 'Demo data', connecting: 'Connecting'}[s];
+  $('span', el).textContent = txt;
+  el.title = s === 'demo' ? 'No monitor backend answered, so this page is showing simulated data. Run app.py on your server to see real metrics.' : '';
+}
+let connState = 'connecting';
+function connect() {
+  const es = new EventSource('api/stream');
+  es.onmessage = e => { if (connState !== 'live') { connState = 'live'; if (!view.paused) setConn('live'); } onSample(JSON.parse(e.data)); };
+  es.onerror = () => { connState = 'reconnecting'; if (!view.paused) setConn('reconnecting'); };
+}
+async function getJSON(u) { const r = await fetch(u, {cache: 'no-store'}); if (!r.ok) throw new Error(u + ' ' + r.status); return r.json(); }
+
+let histTimer = null;
+async function setRange(r) {
+  for (const b of $('#range').children) b.setAttribute('aria-pressed', b.dataset.r === r);
+  clearInterval(histTimer); view.r = r;
+  if (r === 'live') { view.mode = 'live'; view.series = live; requestDraw(); return; }
+  const load = async () => {
+    const h = mode === 'demo' ? demo.history(r) : await getJSON('api/history?range=' + r);
+    if (view.r !== r) return;
+    const now = Date.now() / 1000;
+    view.series = Series.from(h.points); view.mode = 'hist'; view.t0 = now - SPANS[r]; view.t1 = now; view.gap = h.bucket * 2.5 + 2;
+    requestDraw();
+  };
+  try { await load(); } catch (e) { console.error(e); }
+  histTimer = setInterval(() => load().catch(console.error), 60000);
+}
+$('#range').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setRange(b.dataset.r); });
+$('#pause').addEventListener('click', () => {
+  view.paused = !view.paused; view.frozen = view.paused ? live.t[live.t.length - 1] : null;
+  const b = $('#pause'); b.setAttribute('aria-pressed', view.paused); $('span', b).textContent = view.paused ? 'Resume' : 'Pause';
+  setConn(view.paused ? 'paused' : mode === 'demo' ? 'demo' : connState);
+  if (!view.paused && lastState) onSample({t: 0, s: lastS, state: lastState});
+});
+document.addEventListener('click', e => { const b = e.target.closest('th button[data-sort]'); if (!b) return; procSort = b.dataset.sort; document.querySelectorAll('th button[data-sort]').forEach(x => x.toggleAttribute('aria-sort', x === b)); b.setAttribute('aria-sort', 'descending'); if (lastState) renderProcs(lastState); });
+
+// highlight the section in view
+const secIO = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) document.querySelectorAll('.side a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + e.target.id)); }, {rootMargin: '-35% 0px -60% 0px'});
+document.querySelectorAll('main section').forEach(s => secIO.observe(s));
+
+/* ---------------- demo mode (used when no backend answers) ---------------- */
+function makeDemo() {
+  const now = () => Date.now() / 1000;
+  const rnd = (a = 1) => (Math.random() - .5) * 2 * a;
+  const wave = (t, p, ph = 0) => Math.sin(t / p * 2 * Math.PI + ph);
+  const T0 = now();
+  const info = {hostname: 'homarr', os: 'Ubuntu 24.04.1 LTS', kernel: '6.8.0-45-generic', arch: 'x86_64', cpu_model: 'Intel Core i5-12500', cores: 12, physical_cores: 6, mem_total: 32 * GiB, swap_total: 4 * GiB, boot_time: T0 - (12 * 86400 + 4 * 3600 + 17 * 60), virt: 'none'};
+  const DRV = [
+    {mount: '/', device: '/dev/mapper/ubuntu--vg-ubuntu--lv', fs: 'ext4', total: 98 * GiB, base: .412, grow: .0004, disk: 'sda', ino: 6.1},
+    {mount: '/boot', device: '/dev/sda2', fs: 'ext4', total: 1.9 * GiB, base: .183, grow: 0, disk: 'sda', ino: .3},
+    {mount: '/boot/efi', device: '/dev/sda1', fs: 'vfat', total: 1.05 * GiB, base: .006, grow: 0, disk: 'sda', ino: null},
+    {mount: '/mnt/media', device: '/dev/sdb1', fs: 'ext4', total: 7.28 * TiB, base: .868, grow: .0035, disk: 'sdb', ino: 2.4},
+    {mount: '/mnt/backup', device: '/dev/sdc1', fs: 'ext4', total: 3.64 * TiB, base: .521, grow: 0, disk: 'sdc', ino: .9},
+    {mount: '/mnt/nas', device: '//nas.local/archive', fs: 'cifs', total: 10.9 * TiB, base: .64, grow: .0006, disk: null, network: true, ino: null},
+  ];
+  const SMART = {
+    sda: {model: 'Samsung SSD 870 EVO 500GB', status: 'ok', temp: 33, hours: 14210, reallocated: 0, pending: 0},
+    sdb: {model: 'WDC WD80EFZZ-68BTXN0', status: 'warning', temp: 39, hours: 31877, reallocated: 8, pending: 0},
+    sdc: {model: 'ST4000VN006-3CW104', status: 'ok', temp: 36, hours: 9120, reallocated: 0, pending: 0},
+  };
+  const CTR = [
+    ['plex', 'plexinc/pms-docker:latest', 1.3 * GiB], ['qbittorrent', 'lscr.io/linuxserver/qbittorrent', 410 * MiB], ['gluetun', 'qmcgaw/gluetun', 38 * MiB],
+    ['vaultwarden', 'vaultwarden/server:latest', 52 * MiB], ['prowlarr', 'lscr.io/linuxserver/prowlarr', 180 * MiB], ['nzbget', 'lscr.io/linuxserver/nzbget', 96 * MiB],
+    ['syncthing', 'syncthing/syncthing', 88 * MiB],
+  ];
+  const tc = t => clamp((wave(t, 1500) - .35) / .25, 0, 1); // a Plex transcode ramps up and down
+  const dl = t => Math.max(0, wave(t, 700, 1)) ** 3;         // download bursts
+  const bk = t => clamp((wave(t, 5400, 2) - .9) / .05, 0, 1); // nightly-style backup job
+  function gen(t) {
+    const s = {}; const tr = tc(t), d = dl(t), b = bk(t);
+    const cpu = clamp(9 + 4 * wave(t, 600) + 34 * tr * (.8 + .2 * wave(t, 37)) + 6 * d + 5 * b + rnd(2.5), 1, 100);
+    Object.assign(s, {'cpu:user': cpu * .66, 'cpu:system': cpu * .2, 'cpu:iowait': cpu * .07 + 3 * b, 'cpu:irq': cpu * .04, 'cpu:nice': cpu * .03, 'cpu:steal': 0});
+    s['cpu:total'] = s['cpu:user'] + s['cpu:system'] + s['cpu:iowait'] + s['cpu:irq'] + s['cpu:nice'];
+    for (let i = 0; i < 12; i++) s['core:' + i] = clamp(cpu * (.45 + ((i * 7) % 12) / 12 * 1.1) + rnd(7), 0, 100);
+    const lo = x => 12 * .5 * x / 100 + .25;
+    s['load:1'] = lo(cpu) + rnd(.08); s['load:5'] = lo(9 + 30 * tc(t - 150) + 4 * wave(t - 150, 600)); s['load:15'] = lo(9 + 22 * tc(t - 450) + 3 * wave(t - 450, 600));
+    const used = 10.6 * GiB + 2.1 * GiB * tr + .35 * GiB * wave(t, 3000) + rnd(.03 * GiB), cached = 13.4 * GiB + .6 * GiB * wave(t, 5000), buffers = .55 * GiB;
+    Object.assign(s, {'mem:used': used, 'mem:cached': cached, 'mem:buffers': buffers, 'mem:free': 32 * GiB - used - cached - buffers, 'mem:pct': (used + buffers * .2) / (32 * GiB) * 100});
+    Object.assign(s, {'swap:used': .21 * GiB, 'swap:free': 3.79 * GiB, 'swap:total': 4 * GiB, 'swap:pct': 5.2});
+    const rx = 1.1 * MiB + 36 * MiB * d + rnd(.3 * MiB), tx = .3 * MiB + 6.5 * MiB * tr + rnd(.15 * MiB);
+    const trx = .04 * MiB + .8 * MiB * tr * .2 + rnd(.02 * MiB), ttx = .06 * MiB + 5.5 * MiB * tr * .6 + rnd(.03 * MiB);
+    Object.assign(s, {'net:enp3s0:rx': Math.max(0, rx), 'net:enp3s0:tx': Math.max(0, tx), 'net:tailscale0:rx': Math.max(0, trx), 'net:tailscale0:tx': Math.max(0, ttx)});
+    s['net:total:rx'] = s['net:enp3s0:rx'] + s['net:tailscale0:rx']; s['net:total:tx'] = s['net:enp3s0:tx'] + s['net:tailscale0:tx'];
+    const io = {sda: [.2 * MiB + rnd(.1 * MiB), 1.2 * MiB + rnd(.5 * MiB)], sdb: [7 * MiB * tr + .5 * MiB + rnd(.3 * MiB) + 40 * MiB * b, rx * .92], sdc: [.05 * MiB, 42 * MiB * b + rnd(.02 * MiB)]};
+    let tr_ = 0, tw_ = 0;
+    for (const [k, [r, w]] of Object.entries(io)) { s[`disk:${k}:r`] = Math.max(0, r); s[`disk:${k}:w`] = Math.max(0, w); s[`disk:${k}:util`] = clamp((r + w) / (150 * MiB) * 100 + 1.5 + rnd(1), 0, 100); tr_ += s[`disk:${k}:r`]; tw_ += s[`disk:${k}:w`]; }
+    s['disk:total:r'] = tr_; s['disk:total:w'] = tw_;
+    s['temp:CPU package'] = 41 + cpu * .38 + rnd(.8); s['temp:Board'] = 27.8 + rnd(.3);
+    for (const dr of DRV) { const p = clamp(dr.base * 100 + dr.grow * 100 * (t - T0) / 86400, 0, 100); s[`drive:${dr.mount}:pct`] = p; s[`drive:${dr.mount}:used`] = p / 100 * dr.total; }
+    const cc = {plex: 2 + 300 * tr * (.85 + .15 * wave(t, 41)), qbittorrent: 1.5 + 22 * d, gluetun: .8 + 9 * d, vaultwarden: .1, prowlarr: .6 + rnd(.3), nzbget: .4 + 4 * d * .3, syncthing: 1.1 + rnd(.4)};
+    for (const [n, , m] of CTR) { s[`ctr:${n}:cpu`] = Math.max(0, cc[n] + rnd(.2)); s[`ctr:${n}:mem`] = m * (n === 'plex' ? 1 + .9 * tr : 1) * (1 + rnd(.01)); }
+    for (const k in s) if (typeof s[k] === 'number') s[k] = +s[k].toFixed(3);
+    return s;
+  }
+  const events = [
+    {ts: T0 - 3.2 * 3600, kind: 'raised', severity: 'warning', title: '/mnt/media is 87% full', detail: '0.96 TiB free of 7.28 TiB.'},
+    {ts: T0 - 6.5 * 3600, kind: 'resolved', severity: 'warning', title: 'CPU above 90% for 5 minutes', detail: 'Currently at 94%.'},
+    {ts: T0 - 6.7 * 3600, kind: 'raised', severity: 'warning', title: 'CPU above 90% for 5 minutes', detail: 'Currently at 94%.'},
+    {ts: T0 - 29 * 3600, kind: 'resolved', severity: 'warning', title: 'Container gluetun is unhealthy', detail: 'Its health check is failing.'},
+    {ts: T0 - 29.2 * 3600, kind: 'raised', severity: 'warning', title: 'Container gluetun is unhealthy', detail: 'Its health check is failing.'},
+    {ts: T0 - 2 * 86400, kind: 'raised', severity: 'warning', title: 'SMART warning on sdb', detail: '8 reallocated sectors. Back up this drive.'},
+  ];
+  function state(t, s) {
+    const drives = DRV.map(dr => {
+      const pct = s[`drive:${dr.mount}:pct`], used = pct / 100 * dr.total, free = dr.total - used;
+      const days = dr.grow ? (100 - pct) / (dr.grow * 100) : -1;
+      return {mount: dr.mount, device: dr.device, fs: dr.fs, network: !!dr.network, readonly: false, disk: dr.disk, status: 'ok', total: dr.total, used, free, pct, inodes_pct: dr.ino, smart: dr.disk ? SMART[dr.disk] : null, days_to_full: +days.toFixed(1)};
+    });
+    const containers = CTR.map(([n, img, m]) => ({id: n, name: n, image: img, state: 'running', status: `Up ${n === 'gluetun' ? '28 hours' : '12 days'}`, cpu: s[`ctr:${n}:cpu`], mem: s[`ctr:${n}:mem`], mem_limit: 32 * GiB, restarts: n === 'gluetun' ? 2 : 0, health: n === 'gluetun' || n === 'vaultwarden' ? 'healthy' : null, exit_code: 0}));
+    containers.push({id: 'recyclarr', name: 'recyclarr', image: 'ghcr.io/recyclarr/recyclarr', state: 'exited', status: 'Exited (0) 3 hours ago', cpu: null, mem: null, mem_limit: null, restarts: 0, health: null, exit_code: 0});
+    const pr = [['Plex Media Server', 'plex', s['ctr:plex:cpu'] * .7, 900 * MiB], ['Plex Transcoder', 'plex', tc(t) > .05 ? s['ctr:plex:cpu'] * .3 : 0, tc(t) > .05 ? 780 * MiB : 0], ['qbittorrent-nox', 'abc', s['ctr:qbittorrent:cpu'], 402 * MiB],
+      ['dockerd', 'root', 1.2 + rnd(.4), 118 * MiB], ['containerd', 'root', .6 + rnd(.2), 64 * MiB], ['syncthing', 'root', s['ctr:syncthing:cpu'], 86 * MiB], ['tailscaled', 'root', .4 + rnd(.2), 58 * MiB],
+      ['python3', 'root', 1.1 + rnd(.3), 71 * MiB], ['vaultwarden', 'root', .1, 49 * MiB], ['Prowlarr', 'abc', s['ctr:prowlarr:cpu'], 176 * MiB], ['nzbget', 'abc', s['ctr:nzbget:cpu'], 93 * MiB],
+      ['systemd-journald', 'root', .1, 42 * MiB], ['gluetun-entrypoint', 'root', s['ctr:gluetun:cpu'], 36 * MiB], ['sshd', 'root', 0, 9 * MiB]]
+      .filter(p => p[3] > 0).map(([name, user, cpu, mem], i) => ({pid: [1841, 30211, 2210, 1102, 988, 2388, 1011, 3301, 2455, 2501, 2533, 402, 2190, 1150][i], name, user, cpu: Math.max(0, cpu), mem, threads: [42, 9, 21, 28, 19, 17, 12, 6, 14, 24, 11, 1, 8, 1][i]}));
+    return {drives, containers, docker: {available: true, error: null}, smart_available: true, processes: pr, process_count: 287, temps: {}, uptime: t - info.boot_time,
+      alerts: {active: [
+        {id: 'full:/mnt/media', severity: 'warning', title: `/mnt/media is ${Math.round(drives[3].pct)}% full`, detail: `${fmtBytes(drives[3].free)} free of ${fmtBytes(drives[3].total)}. At the current rate it fills in about ${Math.round(drives[3].days_to_full)} days.`, since: T0 - 3.2 * 3600},
+        {id: 'smart:sdb', severity: 'warning', title: 'SMART warning on sdb', detail: '8 reallocated sectors. Back up this drive and keep an eye on the count.', since: T0 - 2 * 86400}], log: events}};
+  }
+  return {
+    info,
+    recent() { const out = [], n = now(); for (let t = n - 600; t < n; t += 2) out.push({t, s: gen(t)}); return out; },
+    tick() { const t = now(); const s = gen(t); return {t, s, state: state(t, s)}; },
+    history(r) { const span = SPANS[r], bucket = r === '1h' ? 10 : Math.max(60, Math.round(span / 360 / 60) * 60), n = now(), out = []; for (let t = n - span; t < n; t += bucket) out.push({t, s: gen(t)}); return {bucket, points: out}; },
+  };
+}
+
+/* ---------------- boot ---------------- */
+async function boot() {
+  try {
+    info = await getJSON('api/info');
+    const rec = await getJSON('api/recent'); for (const p of rec) live.push(p.t, p.s);
+    mode = 'server';
+  } catch (e) {
+    mode = 'demo'; demo = makeDemo(); info = demo.info; for (const p of demo.recent()) live.push(p.t, p.s);
+  }
+  renderInfo(); buildGauges();
+  if (mode === 'server') {
+    try { onSample(await getJSON('api/state')); } catch (e) { ensureCharts(); requestDraw(); }
+    connect();
+  } else {
+    setConn('demo'); onSample(demo.tick()); setInterval(() => onSample(demo.tick()), 2000);
+  }
+}
+boot();
+</script>
+</body>
+</html>

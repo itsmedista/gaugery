@@ -1,0 +1,39 @@
+services:
+  server-monitor:
+    build: .
+    image: server-monitor:latest
+    container_name: server-monitor
+    restart: unless-stopped
+
+    # The monitor must see the host, not its own container:
+    network_mode: host     # real network interfaces (and the page is served on the host's IP)
+    pid: host              # host processes and the host's mount table
+    privileged: true       # SMART access to your drives
+    # Prefer not to use privileged? Remove it and list your disks instead
+    # (you'll also lose SMART on some NVMe drives):
+    # cap_add: [SYS_RAWIO, SYS_ADMIN]
+    # devices: ["/dev/sda", "/dev/sdb", "/dev/sdc"]
+
+    volumes:
+      - /:/host:ro,rslave                               # every host mount, read-only
+      - /var/run/docker.sock:/var/run/docker.sock:ro    # container stats
+      - ./data:/data                                    # history database
+
+    environment:
+      # Listen address. Put your Tailscale IP here (tailscale ip -4) to keep it on the tailnet.
+      HOST: 0.0.0.0
+      PORT: 8088
+      SAMPLE_INTERVAL: 2
+      RETENTION_DAYS: 14
+      # Phone alerts via ntfy, e.g. https://ntfy.sh/your-private-topic (empty = off)
+      NTFY_URL: ""
+      NTFY_TOKEN: ""
+      # Mount points to hide, comma separated
+      IGNORE_MOUNTS: ""
+      ALERT_CPU: 90
+      ALERT_MEM: 90
+      ALERT_DISK_WARN: 85
+      ALERT_DISK_CRIT: 95
+      ALERT_TEMP_WARN: 80
+      ALERT_TEMP_CRIT: 90
+      ALERT_FILL_DAYS: 14
