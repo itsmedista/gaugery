@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Server Monitor</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315202B'/%3E%3Cpath d='M5 18h5l3-8 5 14 3-6h6' fill='none' stroke='%2335D0BA' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<title>Monitorr</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -30,7 +30,7 @@ button{font:inherit;color:inherit}
 /* top bar */
 .top{position:sticky;top:0;z-index:20;height:var(--top);display:flex;align-items:center;gap:18px;padding:0 18px;background:rgba(13,20,28,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:11px;min-width:0;width:calc(var(--side) - 18px)}
-.brand svg{flex:none}
+.brand img{flex:none}
 .host{font-weight:600;font-size:15.5px;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hostsub{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .conn{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);padding:5px 11px;border:1px solid var(--line2);border-radius:999px}
@@ -200,7 +200,7 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
 <body>
 <header class="top">
   <div class="brand">
-    <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#18232F"/><path d="M5 18h5l3-8 5 14 3-6h6" fill="none" stroke="#35D0BA" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <img src="icon.svg" width="30" height="30" alt="Monitorr" title="Monitorr">
     <div style="min-width:0"><div class="host" id="host">Connecting</div><div class="hostsub" id="hostsub"></div></div>
   </div>
   <span class="conn" id="conn" data-s="connecting"><i></i><span>Connecting</span></span>
@@ -215,6 +215,9 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
   </div>
   <button class="btn" id="pause" aria-pressed="false">
     <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1.5" width="3" height="9" rx="1" fill="currentColor"/><rect x="7" y="1.5" width="3" height="9" rx="1" fill="currentColor"/></svg><span>Pause</span>
+  </button>
+  <button class="btn" id="logout" title="Sign out" aria-label="Sign out" hidden>
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 11 13.5 8l-3-3M13.5 8H6"/></svg>
   </button>
 </header>
 
@@ -729,7 +732,7 @@ function renderAlerts(st) {
 }
 
 function renderInfo() {
-  $('#host').textContent = info.hostname; document.title = info.hostname + ' · Server Monitor';
+  $('#host').textContent = info.hostname; document.title = info.hostname + ' · Monitorr';
   $('#hostsub').textContent = `${info.os}, kernel ${info.kernel}`;
   const facts = [['Processor', info.cpu_model || info.arch], ['Threads', `${info.cores}${info.physical_cores ? ` on ${info.physical_cores} cores` : ''}`], ['Memory', fmtBytes(info.mem_total)], ['Platform', VIRT[info.virt] || info.virt], ['Up for', `<span id="uptime">${fmtDur(Date.now() / 1000 - info.boot_time)}</span>`]];
   $('#facts').innerHTML = facts.map(([k, v]) => `<div><span>${k}</span><b>${k === 'Up for' ? v : esc(v)}</b></div>`).join('');
@@ -758,9 +761,12 @@ let connState = 'connecting';
 function connect() {
   const es = new EventSource('api/stream');
   es.onmessage = e => { if (connState !== 'live') { connState = 'live'; if (!view.paused) setConn('live'); } onSample(JSON.parse(e.data)); };
-  es.onerror = () => { connState = 'reconnecting'; if (!view.paused) setConn('reconnecting'); };
+  es.onerror = () => {
+    connState = 'reconnecting'; if (!view.paused) setConn('reconnecting');
+    if (es.readyState === EventSource.CLOSED) setTimeout(() => getJSON('api/info').then(connect, () => es.onerror()), 5000);
+  };
 }
-async function getJSON(u) { const r = await fetch(u, {cache: 'no-store'}); if (!r.ok) throw new Error(u + ' ' + r.status); return r.json(); }
+async function getJSON(u) { const r = await fetch(u, {cache: 'no-store'}); if (r.status === 401) { location.href = 'login.html'; throw new Error('signed out'); } if (!r.ok) throw new Error(u + ' ' + r.status); return r.json(); }
 
 let histTimer = null;
 async function setRange(r) {
@@ -777,6 +783,7 @@ async function setRange(r) {
   try { await load(); } catch (e) { console.error(e); }
   histTimer = setInterval(() => load().catch(console.error), 60000);
 }
+$('#logout').addEventListener('click', async () => { await fetch('api/logout', {method: 'POST'}).catch(() => {}); location.href = 'login.html'; });
 $('#range').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setRange(b.dataset.r); });
 $('#pause').addEventListener('click', () => {
   view.paused = !view.paused; view.frozen = view.paused ? live.t[live.t.length - 1] : null;
@@ -885,8 +892,10 @@ async function boot() {
     const rec = await getJSON('api/recent'); for (const p of rec) live.push(p.t, p.s);
     mode = 'server';
   } catch (e) {
+    if (e.message === 'signed out') return;
     mode = 'demo'; demo = makeDemo(); info = demo.info; for (const p of demo.recent()) live.push(p.t, p.s);
   }
+  $('#logout').hidden = !info.auth;
   renderInfo(); buildGauges();
   if (mode === 'server') {
     try { onSample(await getJSON('api/state')); } catch (e) { ensureCharts(); requestDraw(); }

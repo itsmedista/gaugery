@@ -7,7 +7,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py collectors.py alerts.py ./
+COPY app.py collectors.py alerts.py auth.py ./
 COPY static ./static
 
 ENV HOST_ROOT=/host \

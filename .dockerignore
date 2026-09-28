@@ -3,5 +3,8 @@ metrics.db*
 __pycache__/
 *.tar.gz
 install.sh
-server-monitor.service
-server-monitor.env
+monitorr.service
+monitorr.env
+.env
+data-dev/
+.git

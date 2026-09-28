@@ -1,4 +1,4 @@
-"""Metric collectors for server-monitor.
+"""Metric collectors for Monitorr.
 
 Collector.sample() returns (series, state):
   series: flat {key: number} used for charts and history
