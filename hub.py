@@ -7,6 +7,7 @@ import asyncio
 import ipaddress
 import json
 import os
+import re
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -20,7 +21,8 @@ from fastapi.staticfiles import StaticFiles
 
 import tlsutil
 from alerts import AlertEngine
-from auth import COOKIE, FREE_TRIES, SESSION_DAYS, Auth, totp_match, totp_secret, totp_uri
+from auth import (COOKIE, FREE_TRIES, SESSION_DAYS, Auth, hash_password, password_problem, recovery_codes,
+                  recovery_hash, totp_match, totp_secret, totp_uri)
 from checks import CheckError, Checks, guard_target, validate
 from common import HERE, harden, open_db, read_json
 from remote import AGENT_PATHS, STREAM_PATHS, AgentError, Remotes
@@ -45,6 +47,33 @@ class ReauthRequired(Exception):
     pass
 
 
+# ---------- personal settings ----------
+PREF_CHOICES = {
+    "theme": ("dark", "light", "system"),
+    "accent": ("teal", "blue", "violet", "amber", "rose"),
+    "lang": ("", "en", "fr", "es", "de"),          # "" = the browser's language
+    "time_format": ("24h", "12h"),
+    "temp_unit": ("C", "F"),
+    "default_range": ("live", "1h", "6h", "24h", "7d"),
+}
+PREF_DEFAULTS = {"theme": "dark", "accent": "teal", "lang": "", "time_format": "24h", "temp_unit": "C",
+                 "default_range": "live", "start_page": "overview"}
+AVATAR_PRESETS = {"initials", *(f"p{i}" for i in range(1, 13))}
+EMAIL_RE = re.compile(r"^[^@\s<>\"'(),;:]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,24}$")
+IMAGE_MAGIC = {b"\x89PNG\r\n\x1a\n": "image/png", b"\xff\xd8\xff": "image/jpeg"}
+
+
+def image_type(data):
+    """The real type of an uploaded picture from its first bytes (never trust the name or header).
+    Only PNG, JPEG and WebP: no SVG, which can carry script."""
+    for magic, mime in IMAGE_MAGIC.items():
+        if data.startswith(magic):
+            return mime
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 def _nearby(ip):
     try:
         a = ipaddress.ip_address(ip)
@@ -67,6 +96,18 @@ class Hub:
             history = [dict(zip(("ts", "kind", "severity", "title", "detail"), r)) for r in
                        self.db.execute("SELECT * FROM events ORDER BY ts DESC LIMIT 100").fetchall()][::-1]
         self.auth = Auth(self.data_dir)
+        with self.db_lock:
+            self.db.execute("CREATE TABLE IF NOT EXISTS avatar (k INTEGER PRIMARY KEY CHECK (k = 1), mime TEXT, data BLOB, updated REAL)")
+            self.db.commit()
+        # A password changed in Settings is kept here and wins over AUTH_PASSWORD_HASH, until someone
+        # changes AUTH_PASSWORD_HASH on the server: that's the owner's way back in, so then it wins.
+        env_hash = self.auth.pw_hash
+        if self.get("env_hash_seen") != env_hash:
+            self.set("env_hash_seen", env_hash)
+            self.set("password_hash", None)
+        if self.get("password_hash"):
+            self.auth.set_hash(self.get("password_hash"))
+        self.auth.generation = self.get("session_generation", 0)
         self.remotes = Remotes(self.db, self.db_lock, LOCAL_AGENT or None, os.environ.get("AGENT_TOKEN", "").strip())
         self.checks = Checks(self.db, self.db_lock, self.remotes.name)
         # security-relevant events: kept here and sent to ntfy (NTFY_URL)
@@ -183,10 +224,18 @@ def create_app():
             ok = await asyncio.to_thread(auth.password_ok, user, password)
         secret = hub.get("totp_secret")
         if ok and secret:
-            step = totp_match(secret, body.get("code"), hub.get("totp_last", 0))
-            ok = step is not None
-            if ok:
+            code = str(body.get("code") or "")[:40]
+            step = totp_match(secret, code, hub.get("totp_last", 0))
+            if step is not None:
                 hub.set("totp_last", step)
+            else:  # a one-time recovery code instead of the app's code?
+                codes, h = hub.get("recovery_codes", []), recovery_hash(code)
+                ok = len("".join(ch for ch in code if ch.isalnum())) == 10 and h in codes
+                if ok:
+                    codes.remove(h)
+                    hub.set("recovery_codes", codes)
+                    hub.note("Signed in with a recovery code", f"From {ip}. {len(codes)} codes left: "
+                             "make new ones in Settings if you still have your authenticator app.")
         if not ok:
             n = auth.failed(ip)
             if n == FREE_TRIES + 2 or n % 25 == 0:
@@ -265,8 +314,10 @@ def create_app():
         hub.set("totp_secret", pending)
         hub.set("totp_last", step)
         hub.set("totp_pending", None)
+        codes, hashes = recovery_codes()
+        hub.set("recovery_codes", hashes)
         hub.note("Two-factor sign-in turned on", f"By {who(request)}.")
-        return {"ok": True}
+        return {"ok": True, "recovery_codes": codes}  # shown once; only their hashes are kept
 
     @app.post("/api/2fa/disable")
     async def api_2fa_disable(request: Request):
@@ -277,8 +328,137 @@ def create_app():
             raise HTTPException(400, "Enter a current code from your authenticator app to turn this off")
         hub.set("totp_secret", None)
         hub.set("totp_last", None)
+        hub.set("recovery_codes", None)
         hub.note("Two-factor sign-in turned off", f"By {who(request)}.")
         return {"ok": True}
+
+    @app.post("/api/2fa/recovery-codes")
+    async def api_new_recovery_codes(request: Request):
+        """New set of recovery codes (the old ones stop working). Needs a current app code."""
+        need_recent(request)
+        secret = hub.get("totp_secret")
+        step = totp_match(secret, (await read_json(request)).get("code"), hub.get("totp_last", 0))
+        if not secret or step is None:
+            raise HTTPException(400, "Enter a current code from your authenticator app")
+        hub.set("totp_last", step)
+        codes, hashes = recovery_codes()
+        hub.set("recovery_codes", hashes)
+        hub.note("New recovery codes made", f"The previous ones no longer work. By {who(request)}.")
+        return {"recovery_codes": codes}
+
+    # ---------- your account: profile, avatar, preferences, password ----------
+    def profile():
+        return {"display_name": "", "email": "", "avatar": "initials", **hub.get("profile", {})}
+
+    def prefs():
+        return {**PREF_DEFAULTS, **hub.get("prefs", {})}
+
+    @app.get("/api/me")
+    def api_me():
+        with hub.db_lock:
+            row = hub.db.execute("SELECT updated FROM avatar WHERE k = 1").fetchone()
+        return {"user": auth.user, **profile(), "avatar_version": int(row[0]) if row else 0,
+                "totp": bool(hub.get("totp_secret")), "recovery_left": len(hub.get("recovery_codes", []) or []),
+                "prefs": prefs()}
+
+    @app.put("/api/me/profile")
+    async def api_put_profile(request: Request):
+        body, p = await read_json(request), profile()
+        if "display_name" in body:
+            name = " ".join(str(body["display_name"]).split())[:60]
+            if any(ord(ch) < 32 for ch in name):
+                raise HTTPException(400, "That name has characters it can't have")
+            p["display_name"] = name
+        if "email" in body:
+            email = str(body["email"]).strip()
+            if email and (len(email) > 254 or not EMAIL_RE.match(email)):
+                raise HTTPException(400, "That doesn't look like an email address")
+            if email != p["email"]:
+                hub.note("Email changed", f"{p['email'] or 'none'} to {email or 'none'}, by {who(request)}.")
+            p["email"] = email
+        if "avatar" in body:
+            if body["avatar"] not in AVATAR_PRESETS | {"upload"}:
+                raise HTTPException(400, "Unknown avatar")
+            with hub.db_lock:
+                has_upload = hub.db.execute("SELECT 1 FROM avatar WHERE k = 1").fetchone()
+            if body["avatar"] == "upload" and not has_upload:
+                raise HTTPException(400, "Upload a picture first")
+            p["avatar"] = body["avatar"]
+        hub.set("profile", p)
+        return api_me()
+
+    @app.put("/api/me/prefs")
+    async def api_put_prefs(request: Request):
+        body, p = await read_json(request), prefs()
+        for key, choices in PREF_CHOICES.items():
+            if key in body:
+                if body[key] not in choices:
+                    raise HTTPException(400, f"{key} must be one of: {', '.join(c or 'auto' for c in choices)}")
+                p[key] = body[key]
+        if "start_page" in body:
+            sp = str(body["start_page"])
+            if sp != "overview" and not (sp.startswith("server:") and sp[7:] in remotes.servers):
+                raise HTTPException(400, "Start page must be the overview or one of your servers")
+            p["start_page"] = sp
+        hub.set("prefs", p)
+        return p
+
+    @app.put("/api/me/avatar")
+    async def api_put_avatar(request: Request):
+        data = await request.body()  # at most 64 KB: the page shrinks pictures to 256 px first
+        mime = image_type(data)
+        if not mime:
+            raise HTTPException(415, "Use a PNG, JPEG or WebP picture")
+        with hub.db_lock:
+            hub.db.execute("INSERT OR REPLACE INTO avatar VALUES (1, ?, ?, ?)", (mime, data, time.time()))
+            hub.db.commit()
+        hub.set("profile", {**profile(), "avatar": "upload"})
+        return api_me()
+
+    @app.get("/api/me/avatar")
+    def api_get_avatar():
+        with hub.db_lock:
+            row = hub.db.execute("SELECT mime, data FROM avatar WHERE k = 1").fetchone()
+        if not row or not image_type(row[1]):
+            raise HTTPException(404, "No picture")
+        # served as exactly the checked image type; nosniff and a no-script policy come from harden()
+        return Response(row[1], media_type=row[0],
+                        headers={"Content-Disposition": "inline; filename=avatar", "Cache-Control": "private, max-age=86400"})
+
+    @app.delete("/api/me/avatar")
+    def api_delete_avatar():
+        with hub.db_lock:
+            hub.db.execute("DELETE FROM avatar WHERE k = 1")
+            hub.db.commit()
+        hub.set("profile", {**profile(), "avatar": "initials"})
+        return api_me()
+
+    @app.post("/api/me/password")
+    async def api_change_password(request: Request):
+        """Needs the current password (and code, with two-factor on) every time, not just a recent sign-in."""
+        body = await read_json(request)
+        new = str(body.get("new", ""))
+        problem = password_problem(new, auth.user, str(body.get("current", "")))
+        if problem:
+            raise HTTPException(400, problem)
+        await verify(request, {"user": auth.user, "password": str(body.get("current", "")), "code": body.get("code")})
+        new_hash = await asyncio.to_thread(hash_password, new)
+        hub.set("password_hash", new_hash)
+        auth.set_hash(new_hash)   # every existing session is now invalid...
+        hub.note("Password changed", f"Every other session was signed out. By {who(request)}.")
+        resp = JSONResponse({"ok": True})
+        set_session(resp, request)  # ...except this one, which gets a new cookie
+        return resp
+
+    @app.post("/api/me/sign-out-others")
+    def api_sign_out_others(request: Request):
+        need_recent(request)
+        auth.generation += 1        # every session made before now stops working...
+        hub.set("session_generation", auth.generation)
+        hub.note("Signed out everywhere else", f"By {who(request)}.")
+        resp = JSONResponse({"ok": True})
+        set_session(resp, request)  # ...and this one continues with a fresh one
+        return resp
 
     # ---------- servers ----------
     @app.get("/api/servers")

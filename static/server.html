@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="dark light">
 <title>Monitorr</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -225,45 +225,47 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
+<link rel="stylesheet" href="theme.css">
+<script src="lang.js"></script>
+<script src="i18n.js"></script>
+<script src="account.js"></script>
 </head>
 <body>
 <header class="top">
   <div class="brand">
-    <a class="back" href="./" title="All servers" aria-label="All servers"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></a>
+    <a class="back" href="./" title="All servers" aria-label="All servers" data-i18n-attr="title,aria-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></a>
     <a href="./" style="display:flex"><img src="icon.svg" width="30" height="30" alt="Monitorr: all servers" title="All servers"></a>
-    <div style="min-width:0"><div class="host" id="host">Connecting</div><div class="hostsub" id="hostsub"></div></div>
+    <div style="min-width:0"><div class="host" id="host" data-i18n>Connecting</div><div class="hostsub" id="hostsub"></div></div>
   </div>
-  <span class="conn" id="conn" data-s="connecting"><i></i><span>Connecting</span></span>
+  <span class="conn" id="conn" data-s="connecting"><i></i><span data-i18n>Connecting</span></span>
   <span class="hovertime" id="hovertime" aria-live="off"></span>
   <span class="spacer"></span>
-  <div class="seg" id="range" role="group" aria-label="Time range">
-    <button data-r="live" aria-pressed="true">Live</button>
+  <div class="seg" id="range" role="group" aria-label="Time range" data-i18n-attr="aria-label">
+    <button data-r="live" aria-pressed="true" data-i18n>Live</button>
     <button data-r="1h" aria-pressed="false">1h</button>
     <button data-r="6h" aria-pressed="false">6h</button>
     <button data-r="24h" aria-pressed="false">24h</button>
     <button data-r="7d" aria-pressed="false">7d</button>
   </div>
   <button class="btn" id="pause" aria-pressed="false">
-    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1.5" width="3" height="9" rx="1" fill="currentColor"/><rect x="7" y="1.5" width="3" height="9" rx="1" fill="currentColor"/></svg><span>Pause</span>
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1.5" width="3" height="9" rx="1" fill="currentColor"/><rect x="7" y="1.5" width="3" height="9" rx="1" fill="currentColor"/></svg><span data-i18n>Pause</span>
   </button>
-  <button class="btn" id="logout" title="Sign out" aria-label="Sign out" hidden>
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 11 13.5 8l-3-3M13.5 8H6"/></svg>
-  </button>
+  <div id="account"></div>
 </header>
 
 <div class="layout">
-  <nav class="side" id="side" aria-label="Sections">
-    <a href="#overview"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 11.5a5.5 5.5 0 1 1 11 0"/><path d="M8 11.5 10.5 7"/></svg>Overview</a>
-    <a href="#services" id="nav-services"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.8 1.7 2.6 3.7 2.6 6S9.8 12.3 8 14c-1.8-1.7-2.6-3.7-2.6-6S6.2 3.7 8 2Z"/></svg>Services<span class="badge crit" id="b-svc" hidden></span></a>
-    <a href="#cpu"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="8" height="8" rx="1.5"/><path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2"/></svg>CPU</a>
-    <a href="#memory"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="4.5" width="13" height="7" rx="1"/><path d="M4.5 7v2M7 7v2M9.5 7v2M12 7v2M4 11.5V13M12 11.5V13"/></svg>Memory</a>
-    <a href="#storage"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>Storage<span class="badge" id="b-storage" hidden></span></a>
-    <a href="#network"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 2.5v10M2.5 10 5 12.5 7.5 10M11 13.5v-10M8.5 6 11 3.5 13.5 6"/></svg>Network</a>
-    <a href="#sensors" id="nav-sensors" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 9.3V3a1.5 1.5 0 0 1 3 0v6.3a3 3 0 1 1-3 0Z"/></svg>Sensors</a>
-    <a href="#containers"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m8 1.8 5.5 3v6.4L8 14.2l-5.5-3V4.8Z"/><path d="M2.7 4.9 8 7.8l5.3-2.9M8 7.8v6.3"/></svg>Containers<span class="badge" id="b-ctr" hidden></span></a>
-    <a href="#logs" id="nav-logs" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3.5h10M3 6.5h10M3 9.5h7M3 12.5h5"/></svg>Logs</a>
-    <a href="#processes"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg>Processes</a>
-    <a href="#alerts"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2a4 4 0 0 1 4 4v3l1.5 2.5h-11L4 9V6a4 4 0 0 1 4-4ZM6.5 13.5a1.6 1.6 0 0 0 3 0"/></svg>Alerts<span class="badge" id="b-alerts" hidden></span></a>
+  <nav class="side" id="side" aria-label="Sections" data-i18n-attr="aria-label">
+    <a data-i18n href="#overview"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 11.5a5.5 5.5 0 1 1 11 0"/><path d="M8 11.5 10.5 7"/></svg>Overview</a>
+    <a data-i18n href="#services" id="nav-services"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.8 1.7 2.6 3.7 2.6 6S9.8 12.3 8 14c-1.8-1.7-2.6-3.7-2.6-6S6.2 3.7 8 2Z"/></svg>Services<span class="badge crit" id="b-svc" hidden></span></a>
+    <a data-i18n href="#cpu"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="8" height="8" rx="1.5"/><path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2"/></svg>CPU</a>
+    <a data-i18n href="#memory"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="4.5" width="13" height="7" rx="1"/><path d="M4.5 7v2M7 7v2M9.5 7v2M12 7v2M4 11.5V13M12 11.5V13"/></svg>Memory</a>
+    <a data-i18n href="#storage"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>Storage<span class="badge" id="b-storage" hidden></span></a>
+    <a data-i18n href="#network"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 2.5v10M2.5 10 5 12.5 7.5 10M11 13.5v-10M8.5 6 11 3.5 13.5 6"/></svg>Network</a>
+    <a data-i18n href="#sensors" id="nav-sensors" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 9.3V3a1.5 1.5 0 0 1 3 0v6.3a3 3 0 1 1-3 0Z"/></svg>Sensors</a>
+    <a data-i18n href="#containers"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m8 1.8 5.5 3v6.4L8 14.2l-5.5-3V4.8Z"/><path d="M2.7 4.9 8 7.8l5.3-2.9M8 7.8v6.3"/></svg>Containers<span class="badge" id="b-ctr" hidden></span></a>
+    <a data-i18n href="#logs" id="nav-logs" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3.5h10M3 6.5h10M3 9.5h7M3 12.5h5"/></svg>Logs</a>
+    <a data-i18n href="#processes"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg>Processes</a>
+    <a data-i18n href="#alerts"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2a4 4 0 0 1 4 4v3l1.5 2.5h-11L4 9V6a4 4 0 0 1 4-4ZM6.5 13.5a1.6 1.6 0 0 0 3 0"/></svg>Alerts<span class="badge" id="b-alerts" hidden></span></a>
     <div class="facts" id="facts"></div>
   </nav>
 
@@ -274,72 +276,72 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
     </section>
 
     <section id="services">
-      <div class="sh"><h2>Services</h2><span class="note" id="svc-note"></span>
-        <button class="btn sm act" id="svc-add"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11"/></svg>Add check</button></div>
-      <div class="tw" id="svc-table"><div class="empty">Loading…</div></div>
+      <div class="sh"><h2 data-i18n>Services</h2><span class="note" id="svc-note"></span>
+        <button class="btn sm act" id="svc-add"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11"/></svg><span data-i18n>Add check</span></button></div>
+      <div class="tw" id="svc-table"><div class="empty" data-i18n>Loading…</div></div>
     </section>
 
     <section id="cpu">
-      <div class="sh"><h2>CPU</h2><span class="note" id="cpu-note"></span></div>
+      <div class="sh"><h2 data-i18n>CPU</h2><span class="note" id="cpu-note"></span></div>
       <div class="grid" id="g-cpu"></div>
-      <div class="cores"><div class="ch"><div class="ct">Per thread<small>current usage</small></div></div><div class="corebars" id="cores"></div></div>
+      <div class="cores"><div class="ch"><div class="ct"><span data-i18n>Per thread</span><small data-i18n>current usage</small></div></div><div class="corebars" id="cores"></div></div>
     </section>
 
     <section id="memory">
-      <div class="sh"><h2>Memory</h2><span class="note" id="mem-note"></span></div>
+      <div class="sh"><h2 data-i18n>Memory</h2><span class="note" id="mem-note"></span></div>
       <div class="grid" id="g-mem"></div>
     </section>
 
     <section id="storage">
-      <div class="sh"><h2>Storage</h2><span class="note" id="storage-note"></span></div>
+      <div class="sh"><h2 data-i18n>Storage</h2><span class="note" id="storage-note"></span></div>
       <div class="drives" id="drives"></div>
       <div class="grid" id="g-disk"></div>
     </section>
 
     <section id="network">
-      <div class="sh"><h2>Network</h2><span class="note">Received above the line, sent below</span></div>
+      <div class="sh"><h2 data-i18n>Network</h2><span class="note" data-i18n>Received above the line, sent below</span></div>
       <div class="grid" id="g-net"></div>
     </section>
 
     <section id="sensors" hidden>
-      <div class="sh"><h2>Sensors</h2></div>
+      <div class="sh"><h2 data-i18n>Sensors</h2></div>
       <div class="grid" id="g-temp"></div>
     </section>
 
     <section id="containers">
-      <div class="sh"><h2>Containers</h2><span class="note" id="ctr-note"></span></div>
+      <div class="sh"><h2 data-i18n>Containers</h2><span class="note" id="ctr-note"></span></div>
       <div class="tw" id="ctr-table"></div>
       <div class="grid" id="g-ctr" style="margin-top:10px"></div>
     </section>
 
     <section id="logs" hidden>
-      <div class="sh"><h2>Logs</h2><span class="note" id="log-note"></span></div>
+      <div class="sh"><h2 data-i18n>Logs</h2><span class="note" id="log-note"></span></div>
       <div class="logbar">
-        <select id="log-ctr" aria-label="Container"></select>
-        <input id="log-q" type="search" placeholder="Search these logs" aria-label="Search logs" spellcheck="false">
-        <button class="btn sm" id="log-latest" hidden>Back to latest</button>
-        <span class="sub hint">Click any chart to see the logs from that moment.</span>
+        <select id="log-ctr" aria-label="Container" data-i18n-attr="aria-label"></select>
+        <input id="log-q" type="search" placeholder="Search these logs" aria-label="Search logs" spellcheck="false" data-i18n-attr="placeholder,aria-label">
+        <button class="btn sm" id="log-latest" hidden data-i18n>Back to latest</button>
+        <span class="sub hint" data-i18n>Click any chart to see the logs from that moment.</span>
       </div>
-      <div class="logview" id="log-view" role="log" aria-live="off"><div class="empty">Pick a container.</div></div>
+      <div class="logview" id="log-view" role="log" aria-live="off"><div class="empty" data-i18n>Pick a container.</div></div>
     </section>
 
     <section id="processes">
-      <div class="sh"><h2>Processes</h2><span class="note" id="proc-note"></span></div>
+      <div class="sh"><h2 data-i18n>Processes</h2><span class="note" id="proc-note"></span></div>
       <div class="tw">
         <table>
-          <thead><tr><th>Process</th><th>User</th><th class="n">PID</th><th class="n">Threads</th>
-            <th class="n"><button data-sort="cpu" aria-sort="descending">CPU</button></th>
-            <th class="n"><button data-sort="mem">Memory</button></th></tr></thead>
+          <thead><tr><th data-i18n>Process</th><th data-i18n>User</th><th class="n">PID</th><th class="n" data-i18n>Threads</th>
+            <th class="n"><button data-sort="cpu" aria-sort="descending" data-i18n>CPU</button></th>
+            <th class="n"><button data-sort="mem" data-i18n>Memory</button></th></tr></thead>
           <tbody id="procs"></tbody>
         </table>
       </div>
     </section>
 
     <section id="alerts">
-      <div class="sh"><h2>Alerts</h2><span class="note" id="alert-note"></span></div>
+      <div class="sh"><h2 data-i18n>Alerts</h2><span class="note" id="alert-note"></span></div>
       <div class="strip" id="alerts-active" style="margin-top:0"></div>
       <div class="tw" style="margin-top:10px">
-        <table class="log"><thead><tr><th>When</th><th>Event</th><th>Alert</th><th>Details</th></tr></thead><tbody id="alog"></tbody></table>
+        <table class="log"><thead><tr><th data-i18n>When</th><th data-i18n>Event</th><th data-i18n>Alert</th><th data-i18n>Details</th></tr></thead><tbody id="alog"></tbody></table>
       </div>
     </section>
   </main>
@@ -349,35 +351,35 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
 
 <dialog id="svc-dlg">
   <form id="svc-form" method="dialog">
-    <h2 id="svc-title">Add a service check</h2>
-    <p class="hint">Monitorr checks it from the machine it runs on, and raises an alert after two failures in a row.</p>
-    <label for="c-name">Name</label>
+    <h2 id="svc-title" data-i18n>Add a service check</h2>
+    <p class="hint" data-i18n>Monitorr checks it from the machine it runs on, and raises an alert after two failures in a row.</p>
+    <label for="c-name" data-i18n>Name</label>
     <input id="c-name" required maxlength="60" placeholder="Plex">
     <div class="pair">
-      <div><label for="c-kind">Type</label>
-        <select id="c-kind"><option value="http">Website (HTTP)</option><option value="tcp">Port (TCP)</option><option value="ping">Ping</option></select></div>
-      <div><label for="c-interval">Check every</label>
-        <select id="c-interval"><option value="30">30 seconds</option><option value="60" selected>minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option></select></div>
+      <div><label for="c-kind" data-i18n>Type</label>
+        <select id="c-kind"><option value="http" data-i18n>Website (HTTP)</option><option value="tcp" data-i18n>Port (TCP)</option><option value="ping" data-i18n>Ping</option></select></div>
+      <div><label for="c-interval" data-i18n>Check every</label>
+        <select id="c-interval"><option value="30" data-i18n>30 seconds</option><option value="60" selected data-i18n>minute</option><option value="300" data-i18n>5 minutes</option><option value="900" data-i18n>15 minutes</option></select></div>
     </div>
     <label for="c-target" id="c-target-l">Address</label>
     <input id="c-target" required spellcheck="false" autocapitalize="none">
     <details id="c-more">
-      <summary>More options</summary>
+      <summary data-i18n>More options</summary>
       <div class="pair">
-        <div class="http-only"><label for="c-expect">Expected status</label><input id="c-expect" placeholder="200-399" spellcheck="false"></div>
-        <div><label for="c-timeout">Timeout (seconds)</label><input id="c-timeout" type="number" min="1" max="60" value="10"></div>
+        <div class="http-only"><label for="c-expect" data-i18n>Expected status</label><input id="c-expect" placeholder="200-399" spellcheck="false"></div>
+        <div><label for="c-timeout" data-i18n>Timeout (seconds)</label><input id="c-timeout" type="number" min="1" max="60" value="10"></div>
       </div>
       <div class="http-only">
-        <label for="c-keyword">Page must contain (optional)</label><input id="c-keyword" maxlength="200" spellcheck="false">
-        <label class="check"><input type="checkbox" id="c-verify" checked> Verify the HTTPS certificate</label>
-        <label for="c-cert">Warn when the certificate expires within (days, 0 = off)</label><input id="c-cert" type="number" min="0" max="365" value="14">
+        <label for="c-keyword" data-i18n>Page must contain (optional)</label><input id="c-keyword" maxlength="200" spellcheck="false">
+        <label class="check"><input type="checkbox" id="c-verify" checked> <span data-i18n>Verify the HTTPS certificate</span></label>
+        <label for="c-cert" data-i18n>Warn when the certificate expires within (days, 0 = off)</label><input id="c-cert" type="number" min="0" max="365" value="14">
       </div>
     </details>
     <p class="err" id="c-err" role="alert"></p>
     <div class="row">
-      <button type="button" class="btn danger" id="c-delete" hidden>Delete</button>
-      <button type="button" class="btn" id="c-cancel">Cancel</button>
-      <button class="btn primary" id="c-go">Save and check</button>
+      <button type="button" class="btn danger" id="c-delete" hidden data-i18n>Delete</button>
+      <button type="button" class="btn" id="c-cancel" data-i18n>Cancel</button>
+      <button class="btn primary" id="c-go" data-i18n>Save and check</button>
     </div>
   </form>
 </dialog>
@@ -388,6 +390,14 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
 'use strict';
 /* ---------------- constants & formatting ---------------- */
 const KiB = 1024, MiB = KiB * 1024, GiB = MiB * 1024, TiB = GiB * 1024;
+// Chart text and line colours follow the theme (read from the page's colour tokens).
+const THEME = {};
+function readTheme() {
+  const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
+  Object.assign(THEME, {text: v('--faint') || '#5E7084', cross: v('--muted') || 'rgba(220,228,236,.45)', panel: v('--panel') || '#131C26'});
+}
+readTheme();
+addEventListener('monitorr:theme', () => { readTheme(); if (typeof requestDraw === 'function') requestDraw(); });
 const COL = {teal:'#35D0BA', sky:'#4FA8FF', violet:'#A08CFF', amber:'#F5B942', rose:'#FF6F91', lime:'#A5D65C', slate:'#4E6175', orange:'#FF9955'};
 const PAL = [COL.teal, COL.sky, COL.violet, COL.amber, COL.rose, COL.lime, COL.orange, '#62E0E8', '#D58CFF', '#F7D774', '#7FC4FF', '#FFB3C7'];
 const SPANS = {'1h':3600, '6h':21600, '24h':86400, '7d':604800};
@@ -415,22 +425,22 @@ function fmtBytes(v) {
 const fmtRate = v => v == null ? '–' : fmtBytes(v) + '/s';
 const fmtPct = v => v == null || !isFinite(v) ? '–' : (Math.abs(v) >= 10 ? v.toFixed(0) : v.toFixed(1)) + '%';
 const fmt2 = v => v == null ? '–' : v.toFixed(2);
-const fmtTemp = v => v == null ? '–' : Math.round(v) + '°C';
+const fmtTemp = v => Monitorr.fmtTemp(v);  // readings are °C; shown in your unit
 function fmtDur(s) {
   s = Math.max(0, s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
-  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+  return d ? t('{d}d {h}h', {d, h}) : h ? t('{h}h {m}m', {h, m}) : t('{m}m', {m});
 }
 function fmtAgo(ts) {
   const s = Date.now() / 1000 - ts;
-  if (s < 90) return 'just now';
-  return fmtDur(s) + ' ago';
+  if (s < 90) return t('just now');
+  return t('{time} ago', {time: fmtDur(s)});
 }
 const pad2 = n => String(n).padStart(2, '0');
-function fmtClock(t, secs = true) { const d = new Date(t * 1000); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + (secs ? ':' + pad2(d.getSeconds()) : ''); }
+function fmtClock(t, secs = true) { return Monitorr.fmtClock(t, secs); }
 function fmtWhen(t) {
   const d = new Date(t * 1000), today = new Date();
   const same = d.toDateString() === today.toDateString();
-  return (same ? '' : d.toLocaleDateString(undefined, {month:'short', day:'numeric'}) + ', ') + fmtClock(t, false);
+  return (same ? '' : d.toLocaleDateString(I18N.locale, {month:'short', day:'numeric'}) + ', ') + fmtClock(t, false);
 }
 function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; }
 function heat(p) { return p < 50 ? COL.teal : p < 75 ? '#7FD68A' : p < 90 ? COL.amber : '#FF5A5F'; }
@@ -560,7 +570,7 @@ class Chart {
       const y = Math.round(Y(v)) + .5;
       ctx.strokeStyle = Math.abs(v) < st * 1e-6 && yMin < 0 ? 'rgba(141,160,182,.38)' : 'rgba(141,160,182,.09)';
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(pw, y); ctx.stroke();
-      ctx.fillStyle = '#5E7084'; ctx.fillText(cfg.axis(Math.abs(v)), pw + 7, clamp(y, padT + 5, padT + ph - 2));
+      ctx.fillStyle = THEME.text; ctx.fillText(cfg.axis(Math.abs(v)), pw + 7, clamp(y, padT + 5, padT + ph - 2));
     }
     const span = t1 - t0, want = Math.max(2, pw / 115);
     const step = TSTEPS.find(s => span / s <= want) || 86400;
@@ -571,10 +581,10 @@ class Chart {
       ctx.strokeStyle = 'rgba(141,160,182,.06)'; ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + ph); ctx.stroke();
       const d = new Date(t * 1000);
       const lab = step >= 86400 ? d.toLocaleDateString(undefined, {weekday:'short', day:'numeric'}) : fmtClock(t, step < 60);
-      ctx.fillStyle = '#5E7084'; ctx.fillText(lab, x, h - 4);
+      ctx.fillStyle = THEME.text; ctx.fillText(lab, x, h - 4);
     }
     ctx.textAlign = 'left';
-    if (!any) { ctx.fillStyle = '#5E7084'; ctx.textBaseline = 'middle'; ctx.textAlign = 'center'; ctx.fillText(n ? 'No data in this range' : 'Waiting for data', pw / 2, padT + ph / 2); ctx.textAlign = 'left'; }
+    if (!any) { ctx.fillStyle = THEME.text; ctx.textBaseline = 'middle'; ctx.textAlign = 'center'; ctx.fillText(t(n ? 'No data in this range' : 'Waiting for data'), pw / 2, padT + ph / 2); ctx.textAlign = 'left'; }
 
     // series
     ctx.save(); ctx.beginPath(); ctx.rect(0, padT - 1, pw, ph + 2); ctx.clip();
@@ -612,8 +622,8 @@ class Chart {
       const k = clamp(lowerBound(T, hoverT), i0, i1 - 1);
       idx = (k > i0 && Math.abs(T[k - 1] - hoverT) < Math.abs(T[k] - hoverT)) ? k - 1 : k;
       const x = Math.round(X(T[idx])) + .5;
-      ctx.strokeStyle = 'rgba(220,228,236,.45)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + ph); ctx.stroke();
-      dims.forEach((d, di) => { const v = tops[di][idx - i0]; if (v == null || d.hidden) return; ctx.beginPath(); ctx.arc(x, Y(v), 3.2, 0, 7); ctx.fillStyle = d.color; ctx.fill(); ctx.strokeStyle = '#131C26'; ctx.lineWidth = 1.5; ctx.stroke(); });
+      ctx.strokeStyle = THEME.cross; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + ph); ctx.stroke();
+      dims.forEach((d, di) => { const v = tops[di][idx - i0]; if (v == null || d.hidden) return; ctx.beginPath(); ctx.arc(x, Y(v), 3.2, 0, 7); ctx.fillStyle = d.color; ctx.fill(); ctx.strokeStyle = THEME.panel; ctx.lineWidth = 1.5; ctx.stroke(); });
     }
     if (idx < 0) { idx = i1 - 1; }
     dims.forEach((d, i) => {
@@ -634,18 +644,18 @@ const built = {base: false, net: new Set(), disk: new Set(), util: null, temp: n
 function ensureCharts() {
   if (!built.base) {
     built.base = true;
-    new Chart($('#g-cpu'), {title: 'Utilization', sub: 'all threads', wide: true, h: 190, stacked: true, max: 100, fmt: fmtPct, axis: v => v + '%', dims: [
-      {key:'cpu:user', name:'user', color:COL.teal}, {key:'cpu:system', name:'system', color:COL.sky},
-      {key:'cpu:iowait', name:'iowait', color:COL.amber}, {key:'cpu:irq', name:'irq', color:COL.violet},
-      {key:'cpu:nice', name:'nice', color:COL.lime}, {key:'cpu:steal', name:'steal', color:COL.rose}]});
-    new Chart($('#g-cpu'), {title: 'Load average', sub: 'runnable tasks', fmt: fmt2, axis: v => +v.toFixed(2) + '', dims: [
+    new Chart($('#g-cpu'), {title: t('Utilization'), sub: t('all threads'), wide: true, h: 190, stacked: true, max: 100, fmt: fmtPct, axis: v => v + '%', dims: [
+      {key:'cpu:user', name: t('user'), color:COL.teal}, {key:'cpu:system', name: t('system'), color:COL.sky},
+      {key:'cpu:iowait', name: t('iowait'), color:COL.amber}, {key:'cpu:irq', name: t('irq'), color:COL.violet},
+      {key:'cpu:nice', name: t('nice'), color:COL.lime}, {key:'cpu:steal', name: t('steal'), color:COL.rose}]});
+    new Chart($('#g-cpu'), {title: t('Load average'), sub: t('runnable tasks'), fmt: fmt2, axis: v => +v.toFixed(2) + '', dims: [
       {key:'load:1', name:'1 min', color:COL.teal}, {key:'load:5', name:'5 min', color:COL.sky}, {key:'load:15', name:'15 min', color:COL.violet}]});
-    new Chart($('#g-cpu'), {title: 'Total usage', sub: 'busy time', max: 100, fmt: fmtPct, axis: v => v + '%', dims: [{key:'cpu:total', name:'busy', color:COL.teal}]});
-    new Chart($('#g-mem'), {title: 'RAM', sub: 'where memory is going', stacked: true, binary: true, h: 170, wide: false, max: () => info.mem_total, fmt: fmtBytes, dims: [
-      {key:'mem:used', name:'used', color:COL.teal}, {key:'mem:buffers', name:'buffers', color:COL.violet},
-      {key:'mem:cached', name:'cached', color:COL.sky}, {key:'mem:free', name:'free', color:COL.slate}]});
-    new Chart($('#g-mem'), {title: 'Swap', stacked: true, binary: true, h: 170, max: () => Math.max(lastS['swap:total'] || info.swap_total || 0, 1), fmt: fmtBytes, dims: [
-      {key:'swap:used', name:'used', color:COL.rose}, {key:'swap:free', name:'free', color:COL.slate}]});
+    new Chart($('#g-cpu'), {title: t('Total usage'), sub: t('busy time'), max: 100, fmt: fmtPct, axis: v => v + '%', dims: [{key:'cpu:total', name: t('busy'), color:COL.teal}]});
+    new Chart($('#g-mem'), {title: t('RAM'), sub: t('where memory is going'), stacked: true, binary: true, h: 170, wide: false, max: () => info.mem_total, fmt: fmtBytes, dims: [
+      {key:'mem:used', name: t('used'), color:COL.teal}, {key:'mem:buffers', name: t('buffers'), color:COL.violet},
+      {key:'mem:cached', name: t('cached'), color:COL.sky}, {key:'mem:free', name: t('free'), color:COL.slate}]});
+    new Chart($('#g-mem'), {title: t('Swap'), stacked: true, binary: true, h: 170, max: () => Math.max(lastS['swap:total'] || info.swap_total || 0, 1), fmt: fmtBytes, dims: [
+      {key:'swap:used', name: t('used'), color:COL.rose}, {key:'swap:free', name: t('free'), color:COL.slate}]});
   }
   const S = live; if (S.v.size === built.keys) return; built.keys = S.v.size;
   const keys = [...S.v.keys()];
@@ -653,26 +663,26 @@ function ensureCharts() {
     let m;
     if ((m = k.match(/^net:(.+):rx$/)) && m[1] !== 'total' && !built.net.has(m[1])) {
       built.net.add(m[1]);
-      new Chart($('#g-net'), {title: m[1], sub: 'interface traffic', binary: true, fmt: fmtRate, axis: fmtBytes, dims: [
-        {key:`net:${m[1]}:rx`, name:'received', color:COL.teal}, {key:`net:${m[1]}:tx`, name:'sent', color:COL.violet, neg:true}]});
+      new Chart($('#g-net'), {title: m[1], sub: t('interface traffic'), binary: true, fmt: fmtRate, axis: fmtBytes, dims: [
+        {key:`net:${m[1]}:rx`, name: t('received'), color:COL.teal}, {key:`net:${m[1]}:tx`, name: t('sent'), color:COL.violet, neg:true}]});
     }
     if ((m = k.match(/^disk:(.+):r$/)) && m[1] !== 'total' && !built.disk.has(m[1])) {
       built.disk.add(m[1]);
-      new Chart($('#g-disk'), {title: m[1], sub: 'read above, write below', binary: true, fmt: fmtRate, axis: fmtBytes, dims: [
-        {key:`disk:${m[1]}:r`, name:'read', color:COL.teal}, {key:`disk:${m[1]}:w`, name:'write', color:COL.amber, neg:true}]});
+      new Chart($('#g-disk'), {title: m[1], sub: t('read above, write below'), binary: true, fmt: fmtRate, axis: fmtBytes, dims: [
+        {key:`disk:${m[1]}:r`, name: t('read'), color:COL.teal}, {key:`disk:${m[1]}:w`, name: t('write'), color:COL.amber, neg:true}]});
     }
   }
   const utilKeys = keys.filter(k => /^disk:.+:util$/.test(k));
   if (utilKeys.length) {
     const dims = utilKeys.map((k, i) => ({key: k, name: k.split(':')[1], color: PAL[i % PAL.length]}));
-    if (!built.util) built.util = new Chart($('#g-disk'), {title: 'Disk busy time', sub: 'share of time servicing I/O', max: 100, fmt: fmtPct, axis: v => v + '%', dims});
+    if (!built.util) built.util = new Chart($('#g-disk'), {title: t('Disk busy time'), sub: t('share of time servicing I/O'), max: 100, fmt: fmtPct, axis: v => v + '%', dims});
     else if (built.util.cfg.dims.length !== dims.length) built.util.setDims(dims);
   }
   const tempKeys = keys.filter(k => k.startsWith('temp:'));
   if (tempKeys.length) {
     $('#sensors').hidden = false; $('#nav-sensors').hidden = false;
     const dims = tempKeys.map((k, i) => ({key: k, name: k.slice(5), color: PAL[i % PAL.length]}));
-    if (!built.temp) built.temp = new Chart($('#g-temp'), {title: 'Temperatures', wide: true, h: 170, autoMin: true, fmt: fmtTemp, axis: v => v + '°', dims});
+    if (!built.temp) built.temp = new Chart($('#g-temp'), {title: t('Temperatures'), wide: true, h: 170, autoMin: true, fmt: fmtTemp, axis: v => Math.round(Monitorr.temp(v)) + '°', dims});
     else if (built.temp.cfg.dims.length !== dims.length) built.temp.setDims(dims);
   }
   const cKeys = keys.filter(k => /^ctr:.+:cpu$/.test(k)).map(k => k.slice(4, -4)).sort();
@@ -680,8 +690,8 @@ function ensureCharts() {
     const cpuDims = cKeys.map((n, i) => ({key:`ctr:${n}:cpu`, name:n, color:PAL[i % PAL.length]}));
     const memDims = cKeys.map((n, i) => ({key:`ctr:${n}:mem`, name:n, color:PAL[i % PAL.length]}));
     if (!built.ctrCpu) {
-      built.ctrCpu = new Chart($('#g-ctr'), {title: 'Container CPU', sub: '100% = one thread', stacked: true, fmt: fmtPct, axis: v => v + '%', dims: cpuDims});
-      built.ctrMem = new Chart($('#g-ctr'), {title: 'Container memory', stacked: true, binary: true, fmt: fmtBytes, dims: memDims});
+      built.ctrCpu = new Chart($('#g-ctr'), {title: t('Container CPU'), sub: t('100% = one thread'), stacked: true, fmt: fmtPct, axis: v => v + '%', dims: cpuDims});
+      built.ctrMem = new Chart($('#g-ctr'), {title: t('Container memory'), stacked: true, binary: true, fmt: fmtBytes, dims: memDims});
     } else if (built.ctrCpu.cfg.dims.length !== cpuDims.length) { built.ctrCpu.setDims(cpuDims); built.ctrMem.setDims(memDims); }
   }
 }
@@ -692,14 +702,14 @@ function sumPeak(k1, k2, floor) { const a = live.v.get(k1), b = live.v.get(k2); 
 const DISC_FS = ['iso9660', 'udf'];  // CD/DVD images always read 100% full (same rule as the alerts)
 const splitUnit = s => { const i = s.indexOf(' '); return i < 0 ? [s, ''] : [s.slice(0, i), s.slice(i + 1)]; };
 const GAUGES = [
-  {id:'cpu', label:'CPU', get: s => ({v: s['cpu:total'], max: 100, num: Math.round(s['cpu:total'] ?? 0), unit: '%', sub: `${info.cores} threads`})},
-  {id:'load', label:'Load', get: s => ({v: s['load:1'], max: info.cores, num: fmt2(s['load:1']), unit: '1 min', sub: `5m ${fmt2(s['load:5'])}  15m ${fmt2(s['load:15'])}`})},
-  {id:'ram', label:'RAM', get: s => ({v: s['mem:pct'], max: 100, num: Math.round(s['mem:pct'] ?? 0), unit: '%', sub: `${fmtBytes(s['mem:used'])} of ${fmtBytes(info.mem_total)}`})},
-  {id:'swap', label:'Swap', get: s => { const t = s['swap:total'] ?? info.swap_total; return t ? {v: s['swap:pct'], max: 100, num: Math.round(s['swap:pct'] ?? 0), unit: '%', sub: `${fmtBytes(s['swap:used'])} of ${fmtBytes(t)}`} : {v: 0, max: 100, num: '–', unit: 'none', sub: 'No swap configured'}; }},
-  {id:'disk', label:'Disk I/O', rate: true, get: s => { const v = (s['disk:total:r'] || 0) + (s['disk:total:w'] || 0); const [n, u] = splitUnit(fmtRate(v)); return {v, max: sumPeak('disk:total:r', 'disk:total:w', 8 * MiB), num: n, unit: u, sub: `R ${fmtRate(s['disk:total:r'])}  W ${fmtRate(s['disk:total:w'])}`}; }},
-  {id:'net', label:'Network', rate: true, get: s => { const v = (s['net:total:rx'] || 0) + (s['net:total:tx'] || 0); const [n, u] = splitUnit(fmtRate(v)); return {v, max: sumPeak('net:total:rx', 'net:total:tx', 2 * MiB), num: n, unit: u, sub: `In ${fmtRate(s['net:total:rx'])}  Out ${fmtRate(s['net:total:tx'])}`}; }},
-  {id:'temp', label:'Hottest sensor', get: s => { let best = null; for (const k in s) if (k.startsWith('temp:') && (best == null || s[k] > s[best])) best = k; return best ? {v: s[best], max: 100, num: Math.round(s[best]), unit: '°C', sub: best.slice(5), th: [.75, .88]} : {v: 0, max: 100, num: '–', unit: '°C', sub: 'No sensors found'}; }},
-  {id:'store', label:'Fullest drive', get: (s, st) => { const ds = (st?.drives || []).filter(d => d.pct != null && !DISC_FS.includes(d.fs)); if (!ds.length) return {v: 0, max: 100, num: '–', unit: '%', sub: ''}; const d = ds.reduce((a, b) => b.pct > a.pct ? b : a); return {v: d.pct, max: 100, num: Math.round(d.pct), unit: '%', sub: d.mount, th: [.85, .95]}; }},
+  {id:'cpu', label: t('CPU'), get: s => ({v: s['cpu:total'], max: 100, num: Math.round(s['cpu:total'] ?? 0), unit: '%', sub: t('{n} threads', {n: info.cores})})},
+  {id:'load', label: t('Load'), get: s => ({v: s['load:1'], max: info.cores, num: fmt2(s['load:1']), unit: t('1 min'), sub: `5m ${fmt2(s['load:5'])}  15m ${fmt2(s['load:15'])}`})},
+  {id:'ram', label: t('RAM'), get: s => ({v: s['mem:pct'], max: 100, num: Math.round(s['mem:pct'] ?? 0), unit: '%', sub: t('{used} of {total}', {used: fmtBytes(s['mem:used']), total: fmtBytes(info.mem_total)})})},
+  {id:'swap', label: t('Swap'), get: s => { const tot = s['swap:total'] ?? info.swap_total; return tot ? {v: s['swap:pct'], max: 100, num: Math.round(s['swap:pct'] ?? 0), unit: '%', sub: t('{used} of {total}', {used: fmtBytes(s['swap:used']), total: fmtBytes(tot)})} : {v: 0, max: 100, num: '–', unit: t('none'), sub: t('No swap configured')}; }},
+  {id:'disk', label: t('Disk I/O'), rate: true, get: s => { const v = (s['disk:total:r'] || 0) + (s['disk:total:w'] || 0); const [n, u] = splitUnit(fmtRate(v)); return {v, max: sumPeak('disk:total:r', 'disk:total:w', 8 * MiB), num: n, unit: u, sub: `R ${fmtRate(s['disk:total:r'])}  W ${fmtRate(s['disk:total:w'])}`}; }},
+  {id:'net', label: t('Network'), rate: true, get: s => { const v = (s['net:total:rx'] || 0) + (s['net:total:tx'] || 0); const [n, u] = splitUnit(fmtRate(v)); return {v, max: sumPeak('net:total:rx', 'net:total:tx', 2 * MiB), num: n, unit: u, sub: t('In {rx}  Out {tx}', {rx: fmtRate(s['net:total:rx']), tx: fmtRate(s['net:total:tx'])})}; }},
+  {id:'temp', label: t('Hottest sensor'), get: s => { let best = null; for (const k in s) if (k.startsWith('temp:') && (best == null || s[k] > s[best])) best = k; return best ? {v: s[best], max: 100, num: Math.round(Monitorr.temp(s[best])), unit: Monitorr.tempUnit(), sub: best.slice(5), th: [.75, .88]} : {v: 0, max: 100, num: '–', unit: Monitorr.tempUnit(), sub: t('No sensors found')}; }},
+  {id:'store', label: t('Fullest drive'), get: (s, st) => { const ds = (st?.drives || []).filter(d => d.pct != null && !DISC_FS.includes(d.fs)); if (!ds.length) return {v: 0, max: 100, num: '–', unit: '%', sub: ''}; const d = ds.reduce((a, b) => b.pct > a.pct ? b : a); return {v: d.pct, max: 100, num: Math.round(d.pct), unit: '%', sub: d.mount, th: [.85, .95]}; }},
 ];
 function buildGauges() {
   $('#gauges').innerHTML = GAUGES.map(g => Gauge.html({id: 'g_' + g.id, label: g.label})).join('');
@@ -720,25 +730,25 @@ function renderCores(s) {
 }
 
 function smartHTML(d, smartAvailable, smartEnabled) {
-  if (d.network) return '<span class="smart na"><i></i>Network share</span>';
+  if (d.network) return `<span class="smart na"><i></i>${esc(t('Network share'))}</span>`;
   const sm = d.smart;
-  if (!sm && smartEnabled === false) return '<span class="smart na" title="Drive health needs raw disk access, so it is off unless SMART=true is set on this server"><i></i>SMART off</span>';
-  if (!sm) return `<span class="smart na" title="${smartAvailable ? 'No SMART data for this device yet' : 'Install smartmontools to read drive health'}"><i></i>${smartAvailable ? 'No SMART data' : 'smartctl missing'}</span>`;
-  if (sm.status === 'unavailable') return `<span class="smart na" title="${esc(sm.reason || '')}"><i></i>No SMART</span>`;
-  const t = sm.temp != null ? ` ${Math.round(sm.temp)}°C` : '';
+  if (!sm && smartEnabled === false) return `<span class="smart na" title="${esc(t('Drive health needs raw disk access, so it is off unless SMART=true is set on this server'))}"><i></i>${esc(t('SMART off'))}</span>`;
+  if (!sm) return `<span class="smart na" title="${esc(t(smartAvailable ? 'No SMART data for this device yet' : 'Install smartmontools to read drive health'))}"><i></i>${esc(t(smartAvailable ? 'No SMART data' : 'smartctl missing'))}</span>`;
+  if (sm.status === 'unavailable') return `<span class="smart na" title="${esc(sm.reason || '')}"><i></i>${esc(t('No SMART'))}</span>`;
+  const temp = sm.temp != null ? ` ${Monitorr.fmtTemp(sm.temp)}` : '';
   const detail = [sm.model, sm.hours != null ? `${sm.hours.toLocaleString()} power-on hours` : '', sm.reallocated != null ? `${sm.reallocated} reallocated` : '', sm.pending != null ? `${sm.pending} pending` : '', sm.wear != null ? `${sm.wear}% life used` : ''].filter(Boolean).join('\n');
   const st = oneOf(sm.status, ['ok', 'warning', 'failed'], 'na');
-  const label = {ok: 'Healthy', warning: 'Check drive', failed: 'Failing'}[st] || esc(sm.status);
-  return `<span class="smart ${st}" title="${esc(detail)}"><i></i>${label}${t}</span>`;
+  const label = esc({ok: t('Healthy'), warning: t('Check drive'), failed: t('Failing')}[st] || sm.status);
+  return `<span class="smart ${st}" title="${esc(detail)}"><i></i>${label}${temp}</span>`;
 }
 function foreText(d) {
   const x = d.days_to_full;
   if (d.pct == null) return '–';
-  if (x == null) return '<span class="sub">Needs 6h of history</span>';
-  if (x < 0) return 'Not growing';
-  if (x < 1) return '<span class="hl-crit">Full within a day</span>';
-  if (x > 365) return 'Over a year';
-  return `<span class="${x < 14 ? 'hl-crit' : x < 45 ? 'hl-warn' : ''}">About ${Math.round(x)} days</span>`;
+  if (x == null) return `<span class="sub">${esc(t('Needs 6h of history'))}</span>`;
+  if (x < 0) return esc(t('Not growing'));
+  if (x < 1) return `<span class="hl-crit">${esc(t('Full within a day'))}</span>`;
+  if (x > 365) return esc(t('Over a year'));
+  return `<span class="${x < 14 ? 'hl-crit' : x < 45 ? 'hl-warn' : ''}">${esc(t('About {n} days', {n: Math.round(x)}))}</span>`;
 }
 function renderDrives(st) {
   const host = $('#drives'); const drives = st.drives || []; const seen = new Set();
@@ -753,7 +763,7 @@ function renderDrives(st) {
       btn.onclick = () => {
         const open = !openDrives.has(d.mount); open ? openDrives.add(d.mount) : openDrives.delete(d.mount);
         el.classList.toggle('open', open); btn.setAttribute('aria-expanded', open); exp.hidden = !open;
-        if (open && !row.chart) row.chart = new Chart(exp, {title: 'Space used over time', sub: 'switch to 7d to see the trend', max: 100, autoMin: true, h: 130, fmt: fmtPct, axis: v => v + '%', dims: [{key: `drive:${d.mount}:pct`, name: 'used', color: COL.teal}]});
+        if (open && !row.chart) row.chart = new Chart(exp, {title: t('Space used over time'), sub: t('switch to 7d to see the trend'), max: 100, autoMin: true, h: 130, fmt: fmtPct, axis: v => v + '%', dims: [{key: `drive:${d.mount}:pct`, name: t('used'), color: COL.teal}]});
         requestDraw();
       };
       row = {el, chart: null}; driveRows.set(d.mount, row);
@@ -779,7 +789,7 @@ function renderDrives(st) {
   for (const [m, row] of driveRows) if (!seen.has(m)) { row.el.remove(); driveRows.delete(m); }
   const b = $('#b-storage'); b.hidden = !flagged; b.textContent = flagged;
   const total = drives.reduce((a, d) => a + (d.total || 0), 0), used = drives.reduce((a, d) => a + (d.used || 0), 0);
-  $('#storage-note').textContent = `${drives.length} mounts, ${fmtBytes(used)} used of ${fmtBytes(total)}`;
+  $('#storage-note').textContent = t('{n} mounts, {used} used of {total}', {n: drives.length, used: fmtBytes(used), total: fmtBytes(total)});
 }
 
 function renderContainers(st) {
@@ -788,14 +798,14 @@ function renderContainers(st) {
     el.innerHTML = `<div class="empty">Docker isn't reachable${st.docker?.error ? ` (${esc(st.docker.error)})` : ''}. The monitor reads <code>/var/run/docker.sock</code>, so run it as root or add its user to the <code>docker</code> group.</div>`;
     $('#ctr-note').textContent = ''; $('#b-ctr').hidden = true; return;
   }
-  if (!cs.length) { el.innerHTML = '<div class="empty">No containers on this host yet.</div>'; return; }
+  if (!cs.length) { el.innerHTML = `<div class="empty">${esc(t('No containers on this host yet.'))}</div>`; return; }
   const running = cs.filter(c => c.state === 'running').length;
-  $('#ctr-note').textContent = `${running} running, ${cs.length - running} stopped`;
+  $('#ctr-note').textContent = t('{running} running, {stopped} stopped', {running, stopped: cs.length - running});
   const bad = cs.filter(c => c.state === 'restarting' || c.health === 'unhealthy' || (c.state === 'exited' && c.exit_code)).length;
   $('#b-ctr').hidden = !bad; $('#b-ctr').textContent = bad; $('#b-ctr').className = 'badge crit';
-  el.innerHTML = `<table><thead><tr><th>Container</th><th>State</th><th class="n">CPU</th><th class="n">Memory</th><th class="n">Restarts</th><th>Health</th><th></th></tr></thead><tbody>${cs.map(c => {
+  el.innerHTML = `<table><thead><tr><th>${t('Container')}</th><th>${t('State')}</th><th class="n">${t('CPU')}</th><th class="n">${t('Memory')}</th><th class="n">${t('Restarts')}</th><th>${t('Health')}</th><th></th></tr></thead><tbody>${cs.map(c => {
     const memPct = c.mem != null && c.mem_limit ? c.mem / c.mem_limit * 100 : 0;
-    const health = c.health ? `<span class="${c.health === 'unhealthy' ? 'hl-crit' : c.health === 'starting' ? 'hl-warn' : ''}">${esc(c.health)}</span>` : '<span class="sub">no check</span>';
+    const health = c.health ? `<span class="${c.health === 'unhealthy' ? 'hl-crit' : c.health === 'starting' ? 'hl-warn' : ''}">${esc(c.health)}</span>` : `<span class="sub">${esc(t('no check'))}</span>`;
     return `<tr><td><span class="dot ${esc(c.state)}"></span>${esc(c.name)} <span class="sub">${esc(c.image)}</span></td>
       <td class="${c.state === 'restarting' || (c.state === 'exited' && c.exit_code) ? 'hl-crit' : c.state === 'running' ? '' : 'sub'}">${esc(c.status)}</td>
       <td class="n">${c.cpu != null ? `<span class="mini"><i style="width:${clamp(c.cpu / info.cores, 0, 100)}%"></i></span>${fmtPct(c.cpu)}` : '<span class="sub">–</span>'}</td>
@@ -806,7 +816,7 @@ function renderContainers(st) {
 
 function renderProcs(st) {
   const ps = [...(st.processes || [])].sort((a, b) => b[procSort] - a[procSort]).slice(0, 14);
-  $('#proc-note').textContent = `${st.process_count} processes, top by ${procSort === 'cpu' ? 'CPU' : 'memory'}`;
+  $('#proc-note').textContent = t(procSort === 'cpu' ? '{n} processes, top by CPU' : '{n} processes, top by memory', {n: st.process_count});
   $('#procs').innerHTML = ps.map(p => `<tr><td>${esc(p.name)}</td><td class="sub">${esc(p.user)}</td><td class="n sub">${num(p.pid)}</td><td class="n sub">${num(p.threads)}</td>
     <td class="n"><span class="mini"><i style="width:${clamp(p.cpu / info.cores, 0, 100)}%"></i></span>${fmtPct(p.cpu)}</td>
     <td class="n"><span class="mini"><i style="width:${clamp(p.mem / info.mem_total * 100, 0, 100)}%;background:${COL.violet}"></i></span>${fmtBytes(p.mem)}</td></tr>`).join('');
@@ -814,25 +824,25 @@ function renderProcs(st) {
 
 function alertRow(a) {
   const sev = oneOf(a.severity, ['critical', 'warning'], 'warning'), since = +a.since || 0;
-  return `<div class="al ${sev}"><span class="sev">${sev === 'critical' ? 'Critical' : 'Warning'}</span><div><div class="tt">${esc(a.title)}</div><div class="dd">${esc(a.detail)}</div></div><time title="${esc(new Date(since * 1000).toLocaleString())}">since ${esc(fmtAgo(since))}</time></div>`;
+  return `<div class="al ${sev}"><span class="sev">${esc(t(sev === 'critical' ? 'Critical' : 'Warning'))}</span><div><div class="tt">${esc(a.title)}</div><div class="dd">${esc(a.detail)}</div></div><time title="${esc(new Date(since * 1000).toLocaleString())}">${esc(fmtAgo(since))}</time></div>`;
 }
 function renderAlerts(st) {
   const A = st.alerts || {active: [], log: []}; const act = [...svc.alerts, ...A.active];
-  const html = act.length ? act.map(alertRow).join('') : '<div class="okline"><i></i>All checks passing. Alerts appear here when a threshold is crossed.</div>';
+  const html = act.length ? act.map(alertRow).join('') : `<div class="okline"><i></i>${esc(t('All checks passing. Alerts appear here when a threshold is crossed.'))}</div>`;
   $('#strip').innerHTML = html; $('#alerts-active').innerHTML = html;
   const b = $('#b-alerts'); b.hidden = !act.length; b.textContent = act.length; b.className = 'badge' + (act.some(a => a.severity === 'critical') ? ' crit' : '');
-  $('#alert-note').textContent = act.length ? `${act.length} active` : 'None active';
-  $('#alog').innerHTML = A.log.length ? A.log.map(e => { const kind = oneOf(e.kind, ['raised', 'resolved', 'action'], 'raised'), sev = oneOf(e.severity, ['critical', 'warning', 'info'], 'warning'); return `<tr><td>${esc(fmtWhen(+e.ts || 0))}</td><td><span class="kind ${kind} ${sev}">${kind === 'resolved' ? 'Resolved' : kind === 'action' ? 'Action' : sev === 'critical' ? 'Critical' : 'Warning'}</span></td><td>${esc(e.title)}</td><td class="sub">${esc(e.detail)}</td></tr>`; }).join('')
-    : '<tr><td colspan="4" class="empty">No alert history yet.</td></tr>';
+  $('#alert-note').textContent = act.length ? t('{n} active', {n: act.length}) : t('None active');
+  $('#alog').innerHTML = A.log.length ? A.log.map(e => { const kind = oneOf(e.kind, ['raised', 'resolved', 'action'], 'raised'), sev = oneOf(e.severity, ['critical', 'warning', 'info'], 'warning'); return `<tr><td>${esc(fmtWhen(+e.ts || 0))}</td><td><span class="kind ${kind} ${sev}">${esc(t(kind === 'resolved' ? 'Resolved' : kind === 'action' ? 'Action' : sev === 'critical' ? 'Critical' : 'Warning'))}</span></td><td>${esc(e.title)}</td><td class="sub">${esc(e.detail)}</td></tr>`; }).join('')
+    : `<tr><td colspan="4" class="empty">${esc(t('No alert history yet.'))}</td></tr>`;
 }
 
 function renderInfo() {
   $('#host').textContent = info.name || info.hostname; document.title = (info.name || info.hostname) + ' · Monitorr';
-  $('#hostsub').textContent = `${info.os}, kernel ${info.kernel}`;
-  const facts = [['Processor', info.cpu_model || info.arch], ['Threads', `${info.cores}${info.physical_cores ? ` on ${info.physical_cores} cores` : ''}`], ['Memory', fmtBytes(info.mem_total)], ['Platform', VIRT[info.virt] || info.virt], ['Up for', `<span id="uptime">${fmtDur(Date.now() / 1000 - info.boot_time)}</span>`]];
-  $('#facts').innerHTML = facts.map(([k, v]) => `<div><span>${k}</span><b>${k === 'Up for' ? v : esc(v)}</b></div>`).join('');
+  $('#hostsub').textContent = t('{os}, kernel {kernel}', {os: info.os, kernel: info.kernel});
+  const facts = [['Processor', info.cpu_model || info.arch], ['Threads', info.physical_cores ? t('{n} on {c} cores', {n: info.cores, c: info.physical_cores}) : String(info.cores)], ['Memory', fmtBytes(info.mem_total)], ['Platform', t(VIRT[info.virt] || info.virt)], ['Up for', `<span id="uptime">${fmtDur(Date.now() / 1000 - info.boot_time)}</span>`]];
+  $('#facts').innerHTML = facts.map(([k, v]) => `<div><span>${esc(t(k))}</span><b>${k === 'Up for' ? v : esc(v)}</b></div>`).join('');
   $('#cpu-note').textContent = info.cpu_model || '';
-  $('#mem-note').textContent = `${fmtBytes(info.mem_total)} installed`;
+  $('#mem-note').textContent = t('{size} installed', {size: fmtBytes(info.mem_total)});
 }
 
 /* ---------------- data flow ---------------- */
@@ -848,7 +858,7 @@ function onSample(m) {
 }
 function setConn(s) {
   const el = $('#conn'); el.dataset.s = s;
-  const txt = {live: 'Live', reconnecting: 'Reconnecting', paused: 'Paused', demo: 'Demo data', connecting: 'Connecting', offline: 'Unreachable'}[s];
+  const txt = t({live: 'Live', reconnecting: 'Reconnecting', paused: 'Paused', demo: 'Demo data', connecting: 'Connecting', offline: 'Unreachable'}[s]);
   $('span', el).textContent = txt;
   el.title = s === 'demo' ? 'No monitor backend answered, so this page is showing simulated data. Run app.py on your server to see real metrics.' : '';
 }
@@ -879,11 +889,10 @@ async function setRange(r) {
   try { await load(); } catch (e) { console.error(e); }
   histTimer = setInterval(() => load().catch(console.error), 60000);
 }
-$('#logout').addEventListener('click', async () => { await fetch('api/logout', {method: 'POST'}).catch(() => {}); location.href = 'login.html'; });
 $('#range').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setRange(b.dataset.r); });
 $('#pause').addEventListener('click', () => {
   view.paused = !view.paused; view.frozen = view.paused ? live.t[live.t.length - 1] : null;
-  const b = $('#pause'); b.setAttribute('aria-pressed', view.paused); $('span', b).textContent = view.paused ? 'Resume' : 'Pause';
+  const b = $('#pause'); b.setAttribute('aria-pressed', view.paused); $('span', b).textContent = t(view.paused ? 'Resume' : 'Pause');
   setConn(view.paused ? 'paused' : mode === 'demo' ? 'demo' : connState);
   if (!view.paused && lastState) onSample({t: 0, s: lastS, state: lastState});
 });
@@ -982,8 +991,8 @@ function makeDemo() {
 }
 
 /* ---------------- service checks (run by the hub, filed under this server) ---------------- */
-const KIND = {http: 'Website', tcp: 'Port', ping: 'Ping'};
-const TARGET = {http: ['Address', 'https://plex.example.com/web'], tcp: ['Host and port', '192.168.1.10:22'], ping: ['Host', '192.168.1.1']};
+const KIND = {http: t('Website'), tcp: t('Port'), ping: t('Ping')};
+const TARGET = {http: [t('Address'), 'https://plex.example.com/web'], tcp: [t('Host and port'), '192.168.1.10:22'], ping: [t('Host'), '192.168.1.1']};
 let svcTimer = null;
 async function loadServices() {
   clearTimeout(svcTimer);
@@ -992,7 +1001,7 @@ async function loadServices() {
     renderServices(); if (lastState) renderAlerts(lastState);
   } catch (e) {
     if (e.message === 'signed out') return;
-    if (!svc.checks.length) $('#svc-table').innerHTML = `<div class="empty">Couldn't load service checks: ${esc(e.message)}</div>`;
+    if (!svc.checks.length) $('#svc-table').innerHTML = `<div class="empty">${esc(t("Couldn't load service checks:"))} ${esc(t(e.message))}</div>`;
   }
   svcTimer = setTimeout(loadServices, 10000);
 }
@@ -1015,24 +1024,24 @@ const fmtUp = v => v == null ? '<span class="sub">–</span>'
 function renderServices() {
   const cs = svc.checks, el = $('#svc-table');
   const up = cs.filter(c => c.status === 'up').length, down = cs.filter(c => c.status === 'down').length;
-  $('#svc-note').textContent = cs.length ? `${up} of ${cs.length} up` : '';
+  $('#svc-note').textContent = cs.length ? t('{n} of {total} up', {n: up, total: cs.length}) : '';
   $('#b-svc').hidden = !down; $('#b-svc').textContent = down;
   if (!cs.length) {
-    el.innerHTML = '<div class="empty">No service checks yet. Add one to hear when a website, port or host stops answering, not just when this machine is busy.</div>';
+    el.innerHTML = `<div class="empty">${esc(t('No service checks yet. Add one to hear when a website, port or host stops answering, not just when this machine is busy.'))}</div>`;
     return;
   }
   const now = Date.now() / 1000;
-  el.innerHTML = `<table class="svc"><thead><tr><th>Service</th><th>Status</th><th>Response</th><th class="n">24 h</th><th class="n">7 days</th><th>Certificate</th><th></th></tr></thead><tbody>${cs.map(c => {
-    const status = c.status === 'up' ? `<span class="st-up">Up</span> <span class="sub">${c.since ? 'for ' + fmtDur(now - c.since) : ''}</span>`
-      : c.status === 'down' ? `<span class="st-down">${esc(c.detail)}</span>` : '<span class="st-pending">Waiting for first check</span>';
+  el.innerHTML = `<table class="svc"><thead><tr><th>${t('Service')}</th><th>${t('Status')}</th><th>${t('Response')}</th><th class="n">${t('24 h')}</th><th class="n">${t('7 days')}</th><th>${t('Certificate')}</th><th></th></tr></thead><tbody>${cs.map(c => {
+    const status = c.status === 'up' ? `<span class="st-up">${esc(t('Up'))}</span> <span class="sub">${c.since ? esc(t('for {time}', {time: fmtDur(now - c.since)})) : ''}</span>`
+      : c.status === 'down' ? `<span class="st-down">${esc(c.detail)}</span>` : `<span class="st-pending">${esc(t('Waiting for first check'))}</span>`;
     const days = c.cert_expires ? (c.cert_expires - now) / 86400 : null;
     const cert = days == null ? '<span class="sub">–</span>'
-      : `<span class="${days < 3 ? 'hl-crit' : c.cert_days && days < c.cert_days ? 'hl-warn' : ''}">${days < 0 ? 'Expired' : `${Math.floor(days)} days left`}</span>`;
+      : `<span class="${days < 3 ? 'hl-crit' : c.cert_days && days < c.cert_days ? 'hl-warn' : ''}">${esc(days < 0 ? t('Expired') : t('{n} days left', {n: Math.floor(days)}))}</span>`;
     return `<tr><td><span class="dot ${c.status === 'up' ? 'running' : c.status === 'down' ? 'dead' : ''}"></span>${esc(c.name)} <span class="sub">${KIND[c.kind]} · ${esc(c.target)}</span></td>
       <td>${status}</td>
       <td>${spark(c.recent)}<span class="mono">${c.ms != null ? Math.round(c.ms) + ' ms' : ''}</span></td>
       <td class="n">${fmtUp(c.uptime_24h)}</td><td class="n">${fmtUp(c.uptime_7d)}</td><td>${cert}</td>
-      <td class="n"><button class="icon-btn" data-edit="${esc(c.id)}" title="Edit ${esc(c.name)}" aria-label="Edit ${esc(c.name)}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z"/></svg></button></td></tr>`;
+      <td class="n"><button class="icon-btn" data-edit="${esc(c.id)}" title="${esc(t('Edit {name}', {name: c.name}))}" aria-label="${esc(t('Edit {name}', {name: c.name}))}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z"/></svg></button></td></tr>`;
   }).join('')}</tbody></table>`;
 }
 const svcDlg = $('#svc-dlg'); let editing = null;
@@ -1043,7 +1052,7 @@ function syncKind() {
 }
 function openCheck(c) {
   editing = c || null;
-  $('#svc-title').textContent = c ? `Edit ${c.name}` : 'Add a service check';
+  $('#svc-title').textContent = c ? t('Edit {name}', {name: c.name}) : t('Add a service check');
   $('#c-name').value = c?.name || ''; $('#c-kind').value = c?.kind || 'http'; $('#c-target').value = c?.target || '';
   $('#c-interval').value = String(c?.interval || 60);
   if (!$('#c-interval').value) $('#c-interval').value = '60';  // an interval the menu doesn't list
@@ -1061,7 +1070,7 @@ $('#svc-table').addEventListener('click', e => {
 });
 $('#svc-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const go = $('#c-go'); go.disabled = true; go.textContent = 'Checking…'; $('#c-err').textContent = '';
+  const go = $('#c-go'); go.disabled = true; go.textContent = t('Checking…'); $('#c-err').textContent = '';
   const body = {server: SID, name: $('#c-name').value, kind: $('#c-kind').value, target: $('#c-target').value.trim(),
     interval: +$('#c-interval').value, timeout: +$('#c-timeout').value, expect: $('#c-expect').value, keyword: $('#c-keyword').value,
     verify_tls: $('#c-verify').checked, cert_days: +$('#c-cert').value};
@@ -1071,11 +1080,11 @@ $('#svc-form').addEventListener('submit', async e => {
     if (r.status === 401) { location.href = 'login.html'; return; }
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Saving failed');
     svcDlg.close(); loadServices();
-  } catch (err) { $('#c-err').textContent = err.message; }
-  go.disabled = false; go.textContent = 'Save and check';
+  } catch (err) { $('#c-err').textContent = t(err.message); }
+  go.disabled = false; go.textContent = t('Save and check');
 });
 $('#c-delete').addEventListener('click', async () => {
-  if (!editing || !confirm(`Delete the check "${editing.name}" and its history?`)) return;
+  if (!editing || !confirm(t('Delete the check "{name}" and its history?', {name: editing.name}))) return;
   await fetch('api/checks/' + encodeURIComponent(editing.id), {method: 'DELETE'}).catch(() => {});
   svcDlg.close(); loadServices();
 });
@@ -1098,15 +1107,15 @@ const icon = k => `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" s
 // The logs follow the dashboard: Live = latest lines plus new ones as they arrive;
 // 1h..7d = that span; clicking a chart = five minutes either side of that moment.
 function logWindow() {
-  if (logs.at) return {since: logs.at - 300, until: logs.at + 300, label: `around ${fmtWhen(logs.at)}`};
-  if (!view.r || view.r === 'live') return {tail: 300, live: true, label: 'latest'};
-  return {since: Date.now() / 1000 - SPANS[view.r], label: `last ${view.r}`};
+  if (logs.at) return {since: logs.at - 300, until: logs.at + 300, label: t('around {when}', {when: fmtWhen(logs.at)})};
+  if (!view.r || view.r === 'live') return {tail: 300, live: true, label: t('latest')};
+  return {since: Date.now() / 1000 - SPANS[view.r], label: t('last {range}', {range: view.r})};
 }
 function fillContainerPicker(st) {
   if (!feat().logs) return;
   const cs = (st.containers || []).filter(c => allowed('logs', c.name)), sel = $('#log-ctr'), names = cs.map(c => c.name);
   if ([...sel.options].map(o => o.value).join('|') !== names.join('|')) {
-    sel.innerHTML = names.length ? names.map(n => `<option>${esc(n)}</option>`).join('') : '<option value="">No containers</option>';
+    sel.innerHTML = names.length ? names.map(n => `<option>${esc(n)}</option>`).join('') : `<option value="">${esc(t('No containers'))}</option>`;
     if (names.includes(logs.ctr)) sel.value = logs.ctr;
   }
   if (!logs.ctr && cs.length) {
@@ -1122,7 +1131,7 @@ async function loadLogs() {
   if (w.until) p.set('until', w.until.toFixed(0));
   if (logs.q) p.set('q', logs.q);
   $('#log-latest').hidden = !logs.at;
-  $('#log-note').textContent = 'Loading…';
+  $('#log-note').textContent = t('Loading…');
   try {
     const r = await getJSON(API + 'logs?' + p);
     if (seq !== logs.seq) return;  // a newer request replaced this one
@@ -1132,7 +1141,7 @@ async function loadLogs() {
   } catch (e) {
     if (seq !== logs.seq || e.message === 'signed out') return;
     $('#log-note').textContent = '';
-    $('#log-view').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    $('#log-view').innerHTML = `<div class="empty">${esc(t(e.message))}</div>`;
   }
 }
 function startTail() {
@@ -1160,13 +1169,13 @@ function lineHTML(ln, here) {
 }
 function noteLogs() {
   const n = logs.lines.length;
-  $('#log-note').textContent = `${n} line${n === 1 ? '' : 's'} · ${logs.label}` + (logs.q ? ` · matching "${logs.q}"` : '')
-    + (logs.truncated ? ' · older lines cut, narrow the range or search' : '') + (logs.es ? ' · following new lines' : '');
+  $('#log-note').textContent = t(n === 1 ? '{n} line' : '{n} lines', {n}) + ' · ' + logs.label + (logs.q ? ' · ' + t('matching "{q}"', {q: logs.q}) : '')
+    + (logs.truncated ? ' · ' + t('older lines cut, narrow the range or search') : '') + (logs.es ? ' · ' + t('following new lines') : '');
 }
 function renderLogs() {
   const v = $('#log-view'), L = logs.lines;
   if (!L.length) {
-    v.innerHTML = `<div class="empty">${logs.q ? 'No lines match.' : 'Nothing logged in this window.'}</div>`;
+    v.innerHTML = `<div class="empty">${esc(t(logs.q ? 'No lines match.' : 'Nothing logged in this window.'))}</div>`;
     noteLogs(); return;
   }
   // for a chart click, mark the line closest to that moment and scroll it into the middle
@@ -1194,9 +1203,9 @@ $('#log-latest').addEventListener('click', () => { logs.at = null; loadLogs(); }
 // buttons on each container row
 function ctrButtons(c) {
   const f = feat();
-  let h = allowed('logs', c.name) ? `<button class="icon-btn" data-logs="${esc(c.name)}" title="Logs of ${esc(c.name)}" aria-label="Logs of ${esc(c.name)}">${icon('logs')}</button>` : '';
+  let h = allowed('logs', c.name) ? `<button class="icon-btn" data-logs="${esc(c.name)}" title="${esc(t('Logs of {name}', {name: c.name}))}" aria-label="${esc(t('Logs of {name}', {name: c.name}))}">${icon('logs')}</button>` : '';
   if (allowed('actions', c.name)) {
-    const b = (act, label) => `<button class="icon-btn act-${act}" data-act="${act}" data-ctr="${esc(c.name)}" title="${label} ${esc(c.name)}" aria-label="${label} ${esc(c.name)}">${icon(act)}</button>`;
+    const b = (act, label) => `<button class="icon-btn act-${act}" data-act="${act}" data-ctr="${esc(c.name)}" title="${esc(t(label + ' {name}', {name: c.name}))}" aria-label="${esc(t(label + ' {name}', {name: c.name}))}">${icon(act)}</button>`;
     const self = /monitorr/i.test(c.image || '');  // the server refuses to stop Monitorr itself
     h += c.state === 'running' || c.state === 'restarting' ? b('restart', 'Restart') + (self ? '' : b('stop', 'Stop')) : b('start', 'Start');
   }
@@ -1212,19 +1221,19 @@ $('#ctr-table').addEventListener('click', async e => {
   if (lb) { logs.at = null; logs.ctr = lb.dataset.logs; $('#log-ctr').value = logs.ctr; loadLogs(); $('#logs').scrollIntoView({behavior: 'smooth', block: 'start'}); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const {act, ctr} = b.dataset;
-  const ask = {stop: `Stop ${ctr}? Whatever it serves stays offline until you start it again.`,
-    restart: `Restart ${ctr}? It will be unavailable for a few seconds.`}[act];
+  const ask = {stop: t('Stop {name}? Whatever it serves stays offline until you start it again.', {name: ctr}),
+    restart: t('Restart {name}? It will be unavailable for a few seconds.', {name: ctr})}[act];
   if (ask && !confirm(ask)) return;
   b.disabled = true;
-  toast(`${{start: 'Starting', stop: 'Stopping', restart: 'Restarting'}[act]} ${ctr}…`);
+  toast(t({start: 'Starting {name}…', stop: 'Stopping {name}…', restart: 'Restarting {name}…'}[act], {name: ctr}));
   try {
     const r = await fetch(API + 'container-action', {method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({container: ctr, action: act})});
     if (r.status === 401) { location.href = 'login.html'; return; }
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.detail || `${act} failed`);
-    toast(j.message.charAt(0).toUpperCase() + j.message.slice(1) + '.', 'ok');
-  } catch (err) { toast(err.message, 'err'); }
+    toast(t('Done: {what}', {what: j.message}), 'ok');
+  } catch (err) { toast(t(err.message), 'err'); }
   b.disabled = false;
 });
 
@@ -1238,17 +1247,17 @@ async function boot() {
   } catch (e) {
     if (e.message === 'signed out') return;
     if (location.protocol !== 'file:') {  // the agent is down: say so and keep trying, never show demo data
-      $('#host').textContent = 'Offline'; $('#hostsub').textContent = e.message;
+      $('#host').textContent = t('Offline'); $('#hostsub').textContent = t(e.message);
       setConn('offline'); setTimeout(boot, 10000); return;
     }
     mode = 'demo'; $('#services').hidden = $('#nav-services').hidden = true; demo = makeDemo(); info = demo.info; for (const p of demo.recent()) live.push(p.t, p.s);
   }
-  $('#logout').hidden = !info.auth;
   $('#logs').hidden = $('#nav-logs').hidden = !feat().logs; document.body.classList.toggle('can-logs', !!feat().logs);
   renderInfo(); buildGauges();
   if (mode === 'server') {
     try { onSample(await getJSON(API + 'state')); } catch (e) { ensureCharts(); requestDraw(); }
     connect();
+    if (Monitorr.prefs.default_range && Monitorr.prefs.default_range !== 'live') setRange(Monitorr.prefs.default_range);
   } else {
     setConn('demo'); onSample(demo.tick()); setInterval(() => onSample(demo.tick()), 2000);
   }

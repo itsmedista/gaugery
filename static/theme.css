@@ -1,0 +1,46 @@
+/* Theme, accent colour and the account menu, shared by every Monitorr page.
+   html[data-theme] and html[data-accent] are set by account.js from your settings; these rules
+   override each page's own :root colour tokens. */
+html{--accent:var(--teal);--accent2:var(--sky);--topbar:rgba(13,20,28,.88);--shadow:rgba(0,0,0,.6)}
+html[data-accent=blue]{--accent:#4FA8FF;--accent2:#8C9BFF}
+html[data-accent=violet]{--accent:#A08CFF;--accent2:#D58CFF}
+html[data-accent=amber]{--accent:#F5B942;--accent2:#FF9955}
+html[data-accent=rose]{--accent:#FF6F91;--accent2:#FF9EB5}
+
+html[data-theme=light]{
+  color-scheme:light;
+  --bg:#F4F6F9; --panel:#FFFFFF; --panel2:#EEF2F6; --raise:#E6EBF1;
+  --line:#E2E7ED; --line2:#CDD5DF;
+  --text:#18222D; --muted:#56667A; --faint:#8492A3;
+  --teal:#0E9F8B; --sky:#2B7BDB; --violet:#7A63E8; --amber:#C98A06; --rose:#E0476F; --lime:#5F9A22;
+  --ok:#1E9B58; --warn:#C98A06; --crit:#D7373F;
+  --topbar:rgba(244,246,249,.9); --shadow:rgba(20,30,45,.18);
+}
+html[data-theme=light][data-accent=blue]{--accent:#2B7BDB;--accent2:#5B67E8}
+html[data-theme=light][data-accent=violet]{--accent:#7A63E8;--accent2:#B05BD9}
+html[data-theme=light][data-accent=amber]{--accent:#D08A00;--accent2:#E0662E}
+html[data-theme=light][data-accent=rose]{--accent:#E0476F;--accent2:#E07A95}
+html[data-theme=light] body{background:var(--bg)}
+html[data-theme=light] .btn.primary{color:#fff}
+.top{background:var(--topbar)!important}
+.side a.on::before{background:var(--accent)!important}
+:focus-visible{outline-color:var(--accent2)!important}
+
+/* avatar and account menu (header, top right) */
+.avatar{display:inline-grid;place-items:center;flex:none;border-radius:50%;overflow:hidden;background:var(--panel2);color:#fff;font-weight:600;
+  user-select:none;line-height:1}
+.avatar img,.avatar svg{width:100%;height:100%;display:block;object-fit:cover}
+#account{position:relative;flex:none}
+#account>button{display:flex;align-items:center;gap:8px;border:1px solid var(--line2);background:var(--panel);border-radius:999px;padding:3px 10px 3px 3px;cursor:pointer;color:var(--text);font:inherit;font-size:13px}
+#account>button:hover{background:var(--panel2)}
+#account>button .nm{max-width:14ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:40;min-width:230px;padding:6px;border-radius:12px;background:var(--raise);
+  border:1px solid var(--line2);box-shadow:0 18px 44px -14px var(--shadow)}
+.acct-menu .who{display:flex;gap:10px;align-items:center;padding:8px 10px 10px;border-bottom:1px solid var(--line2);margin-bottom:5px}
+.acct-menu .who b{display:block;font-size:14px}
+.acct-menu .who span{display:block;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.acct-menu a,.acct-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:8px;background:none;
+  color:var(--text);font:inherit;font-size:13px;text-decoration:none;text-align:left;cursor:pointer}
+.acct-menu a:hover,.acct-menu button:hover,.acct-menu a:focus-visible,.acct-menu button:focus-visible{background:var(--panel2);outline:none}
+.acct-menu svg{flex:none;color:var(--muted)}
+@media (max-width:640px){#account>button .nm{display:none}#account>button{padding:3px}}

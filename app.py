@@ -9,6 +9,7 @@ Tools:
   python app.py --new-token        make an AGENT_TOKEN
   python app.py --pairing-code     print this agent's pairing code for "Add server"
   python app.py --disable-2fa      turn off two-factor sign-in (if you lost your phone)
+  python app.py --reset-password   set a new password (if you forgot it); signs everyone out
   python app.py --healthcheck      used by Docker's HEALTHCHECK
 """
 import os
@@ -71,6 +72,24 @@ def main():
         from pathlib import Path
         cert, _ = tlsutil.ensure_cert(Path(DB_PATH).parent)
         return print(tlsutil.pairing_code(cert, os.environ.get("AGENT_TOKEN", "").strip()))
+    if "--reset-password" in args:
+        import json
+        import time
+        from auth import prompt_hash
+        from common import open_db
+        from hub import HUB_DB
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            prompt_hash()          # asks twice, checks the length, prints the hash
+        db, _ = open_db(HUB_DB)
+        db.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+        db.execute("CREATE TABLE IF NOT EXISTS events (ts REAL, kind TEXT, severity TEXT, title TEXT, detail TEXT)")
+        db.execute("INSERT OR REPLACE INTO settings VALUES ('password_hash', ?)", (json.dumps(buf.getvalue().strip()),))
+        db.execute("INSERT INTO events VALUES (?, 'action', 'info', ?, ?)",
+                   (time.time(), "Password reset", "From the command line on the server. Everyone was signed out."))
+        db.commit()
+        return print("Password changed. Restart Monitorr's web interface to use it (everyone is signed out).")
     if "--disable-2fa" in args:
         import time
         from common import open_db

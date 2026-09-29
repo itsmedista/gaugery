@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="dark light">
 <title>Monitorr</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -116,22 +116,6 @@ main{max-width:1320px;margin:0 auto;padding:24px}
 .menu hr{border:0;border-top:1px solid var(--line2);margin:5px 4px}
 .menu .danger{color:var(--crit)} .menu .danger svg{color:var(--crit)}
 
-/* security dialog */
-#sec-dlg{width:min(560px,calc(100vw - 32px))}
-#sec-dlg h3{margin:18px 0 8px;font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.tfa{display:grid;gap:10px;font-size:13.5px}
-.tfa .state{display:flex;align-items:center;gap:8px}
-.tfa .state i{width:8px;height:8px;border-radius:50%;background:var(--faint)} .tfa .state.on i{background:var(--ok)}
-.tfa .secret{font:500 15px var(--mono);letter-spacing:.08em;background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:8px 12px;user-select:all;word-break:break-all}
-.tfa a{color:var(--sky)}
-.tfa .inline{display:flex;gap:8px;align-items:flex-start} .tfa .inline input{margin:0;max-width:160px}
-.act{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:9px}
-.act div{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:13px}
-.act div:last-child{border-bottom:0}
-.act time{color:var(--faint);white-space:nowrap;grid-row:span 2}
-.act small{color:var(--muted);font-size:12px}
-.act .empty{display:block;color:var(--muted)}
-
 @media (max-width:640px){
   .top{padding:10px 16px;gap:10px} main{padding:16px}
   .top .btn span,.seg .lbl{display:none}
@@ -140,23 +124,22 @@ main{max-width:1320px;margin:0 auto;padding:24px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
+<link rel="stylesheet" href="theme.css">
+<script src="lang.js"></script>
+<script src="i18n.js"></script>
+<script src="account.js"></script>
 </head>
 <body>
 <header class="top">
   <img src="icon.svg" width="34" height="34" alt="">
-  <div class="word"><b>Monitorr</b><span id="summary">Loading servers…</span></div>
+  <div class="word"><b>Monitorr</b><span id="summary" data-i18n>Loading servers…</span></div>
   <span class="spacer"></span>
   <div class="seg" id="density" role="group" aria-label="Card size">
-    <button data-d="detailed" aria-pressed="true" title="Detailed cards"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M2 9h12"/></svg><span class="lbl">Detailed</span></button>
-    <button data-d="compact" aria-pressed="false" title="Compact cards"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg><span class="lbl">Compact</span></button>
+    <button data-d="detailed" aria-pressed="true" title="Detailed cards" data-i18n-attr="title"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M2 9h12"/></svg><span class="lbl" data-i18n>Detailed</span></button>
+    <button data-d="compact" aria-pressed="false" title="Compact cards" data-i18n-attr="title"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg><span class="lbl" data-i18n>Compact</span></button>
   </div>
-  <button class="btn primary" id="add-btn"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11"/></svg><span>Add server</span></button>
-  <button class="btn" id="sec-btn" title="Security" aria-label="Security">
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 13 3.8v4c0 3-2.1 5.3-5 6.4-2.9-1.1-5-3.4-5-6.4v-4z"/><path d="m5.8 8 1.6 1.6 3-3.2" stroke-linecap="round"/></svg>
-  </button>
-  <button class="btn" id="logout" title="Sign out" aria-label="Sign out" hidden>
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 11 13.5 8l-3-3M13.5 8H6"/></svg>
-  </button>
+  <button class="btn primary" id="add-btn"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11"/></svg><span data-i18n>Add server</span></button>
+  <div id="account"></div>
 </header>
 
 <main>
@@ -168,41 +151,30 @@ main{max-width:1320px;margin:0 auto;padding:24px}
 
 <dialog id="dlg">
   <form id="add-form" method="dialog">
-    <h2>Add a server</h2>
-    <p class="hint">Install the Monitorr agent on it first (<code>sudo ./install.sh --agent</code>, or its Docker setup). It prints the address and a pairing code to paste here. The code lets Monitorr check that it's really talking to that server.</p>
-    <label for="f-name">Name</label>
+    <h2 data-i18n>Add a server</h2>
+    <p class="hint"><span data-i18n>Install the Monitorr agent on it first:</span> <code>sudo ./install.sh --agent</code> <span data-i18n>(or its Docker setup). It prints the address and a pairing code to paste here. The code lets Monitorr check that it's really talking to that server.</span></p>
+    <label for="f-name" data-i18n>Name</label>
     <input id="f-name" name="name" placeholder="NAS" required maxlength="60">
-    <label for="f-url">Address</label>
+    <label for="f-url" data-i18n>Address</label>
     <input id="f-url" name="url" placeholder="https://100.64.0.12:8088" required spellcheck="false" autocapitalize="none">
-    <label for="f-token">Pairing code</label>
+    <label for="f-token" data-i18n>Pairing code</label>
     <input id="f-token" name="pairing" placeholder="mtr1.…" required spellcheck="false" autocapitalize="none" autocomplete="off">
     <p class="err" id="f-err" role="alert"></p>
     <div class="row">
-      <button type="button" class="btn" id="f-cancel">Cancel</button>
-      <button class="btn primary" id="f-go">Connect and add</button>
+      <button type="button" class="btn" id="f-cancel" data-i18n>Cancel</button>
+      <button class="btn primary" id="f-go" data-i18n>Connect and add</button>
     </div>
   </form>
 </dialog>
 
-<dialog id="sec-dlg">
-  <form method="dialog" id="sec-form">
-    <h2>Security</h2>
-    <p class="hint">Signed in as <b id="sec-user"></b>. Sensitive changes ask for your password again after 15 minutes.</p>
-    <h3>Two-factor sign-in</h3>
-    <div class="tfa" id="tfa"></div>
-    <h3>Recent activity</h3>
-    <div class="act" id="sec-act"></div>
-    <div class="row"><button type="button" class="btn" id="sec-close">Close</button></div>
-  </form>
-</dialog>
 
 <script src="reauth.js"></script>
 <script src="gauge.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-const fmtDur = s => { s = Math.max(0, s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`; };
-const ago = t => { const s = Date.now() / 1000 - t; return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
+const fmtDur = s => { s = Math.max(0, s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? t('{d}d {h}h', {d, h}) : h ? t('{h}h {m}m', {h, m}) : t('{m}m', {m}); };
+const ago = ts => { const s = Date.now() / 1000 - ts; return s < 60 ? t('just now') : s < 3600 ? t('{n} min ago', {n: Math.round(s / 60)}) : t('{n} h ago', {n: Math.round(s / 3600)}); };
 const svg = (d, w = 14) => `<svg width="${w}" height="${w}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const I = {
   grip: '<circle cx="6" cy="4" r=".9" fill="currentColor"/><circle cx="10" cy="4" r=".9" fill="currentColor"/><circle cx="6" cy="8" r=".9" fill="currentColor"/><circle cx="10" cy="8" r=".9" fill="currentColor"/><circle cx="6" cy="12" r=".9" fill="currentColor"/><circle cx="10" cy="12" r=".9" fill="currentColor"/>',
@@ -269,30 +241,30 @@ function cardHTML(srv, state) {
   // srv.alerts = the server's own alerts plus its service checks' alerts (merged by the hub)
   const sm = srv.summary, A = srv.alerts, n = A.critical + A.warning, sv = srv.services;
   const compact = prefs.density === 'compact', name = esc(srv.name);
-  const badge = state === 'offline' ? '<span class="badge">Offline</span>'
-    : state === 'pending' ? '<span class="badge">Starting</span>'
-    : `<span class="badge" title="${n} active alert${n === 1 ? '' : 's'}"><b>${n}</b>${n === 1 ? 'alert' : 'alerts'}</span>`;
+  const badge = state === 'offline' ? `<span class="badge">${esc(t('Offline'))}</span>`
+    : state === 'pending' ? `<span class="badge">${esc(t('Starting'))}</span>`
+    : `<span class="badge" title="${esc(t(n === 1 ? '{n} active alert' : '{n} active alerts', {n}))}"><b>${n}</b>${esc(t(n === 1 ? 'alert' : 'alerts'))}</span>`;
   const sub = sm ? `${esc(sm.hostname)} · ${esc(sm.os)}` : esc(srv.url || '');
   let alerts;
   if (state === 'offline') alerts = `<div><i class="critical"></i><span>${esc(srv.error)}</span></div>`;
-  else if (!n) alerts = `<div class="fine"><i></i><span>All checks passing</span></div>`;
-  else if (compact) alerts = `<div><i class="${sevCls(A.top[0].severity)}"></i><span>${esc(A.top[0].title)}${n > 1 ? ` <span class="more">+${n - 1} more</span>` : ''}</span></div>`;
+  else if (!n) alerts = `<div class="fine"><i></i><span>${esc(t('All checks passing'))}</span></div>`;
+  else if (compact) alerts = `<div><i class="${sevCls(A.top[0].severity)}"></i><span>${esc(A.top[0].title)}${n > 1 ? ` <span class="more">${esc(t('+{n} more', {n: n - 1}))}</span>` : ''}</span></div>`;
   else {
     alerts = A.top.map(a => `<div><i class="${sevCls(a.severity)}"></i><span>${esc(a.title)}</span></div>`).join('');
-    if (n > A.top.length) alerts += `<div class="more">and ${n - A.top.length} more</div>`;
+    if (n > A.top.length) alerts += `<div class="more">${esc(t('and {n} more', {n: n - A.top.length}))}</div>`;
   }
-  const meta = state === 'offline' ? (sm ? `Last seen ${ago(sm.t)}` : 'Never reached')
-    : [sm && `Up ${fmtDur(sm.uptime)}`, sv.total && `${sv.up}/${sv.total} services up`,
-       sm?.containers && `${sm.containers.running}/${sm.containers.total} containers`].filter(Boolean).join(' · ');
-  return `<a class="open" href="server.html?id=${encodeURIComponent(srv.id)}" aria-label="Open ${name}" title="${esc(meta)}"></a>
+  const meta = state === 'offline' ? (sm ? t('Last seen {when}', {when: ago(sm.t)}) : t('Never reached'))
+    : [sm && t('Up {time}', {time: fmtDur(sm.uptime)}), sv.total && t('{up}/{total} services up', {up: sv.up, total: sv.total}),
+       sm?.containers && t('{running}/{total} containers', {running: sm.containers.running, total: sm.containers.total})].filter(Boolean).join(' · ');
+  return `<a class="open" href="server.html?id=${encodeURIComponent(srv.id)}" aria-label="${esc(t('Open {name}', {name: srv.name}))}" title="${esc(meta)}"></a>
     <div class="head">
-      <button class="ctl grip" aria-label="Move ${name}. Drag, or use the arrow keys." title="Drag to move">${svg(I.grip)}</button>
-      <div class="name"><b>${name}${srv.local ? '<span class="tag" title="This server">This server</span>' : ''}</b><span>${sub}</span></div>
-      ${isPinned(srv.id) ? `<span class="pin" title="Pinned to the top" aria-label="Pinned">${svg(I.pin, 13)}</span>` : ''}
+      <button class="ctl grip" aria-label="${esc(t('Move {name}. Drag, or use the arrow keys.', {name: srv.name}))}" title="${esc(t('Drag to move'))}">${svg(I.grip)}</button>
+      <div class="name"><b>${name}${srv.local ? `<span class="tag" title="${esc(t('This server'))}">${esc(t('This server'))}</span>` : ''}</b><span>${sub}</span></div>
+      ${isPinned(srv.id) ? `<span class="pin" title="${esc(t('Pinned to the top'))}" aria-label="${esc(t('Pinned'))}">${svg(I.pin, 13)}</span>` : ''}
       ${badge}
-      <button class="ctl more" aria-label="Options for ${name}" aria-haspopup="menu" title="Options">${svg(I.more)}</button>
+      <button class="ctl more" aria-label="${esc(t('Options for {name}', {name: srv.name}))}" aria-haspopup="menu" title="${esc(t('Options'))}">${svg(I.more)}</button>
     </div>
-    <div class="gauges">${gauge(srv.id + '-cpu', 'CPU', sm?.cpu)}${gauge(srv.id + '-ram', 'RAM', sm?.mem)}${gauge(srv.id + '-disk', compact ? 'Disk' : 'Fullest drive', sm?.disk, [.85, .95])}</div>
+    <div class="gauges">${gauge(srv.id + '-cpu', t('CPU'), sm?.cpu)}${gauge(srv.id + '-ram', t('RAM'), sm?.mem)}${gauge(srv.id + '-disk', t(compact ? 'Disk' : 'Fullest drive'), sm?.disk, [.85, .95])}</div>
     <div class="alerts">${alerts}</div>
     <div class="foot"><span>${esc(meta)}</span></div>`;
 }
@@ -301,7 +273,7 @@ function cardHTML(srv, state) {
 // and moved cards can glide to their new place.
 const cardEls = new Map();
 const addTile = Object.assign(document.createElement('button'), {className: 'add', id: 'add-card',
-  innerHTML: `${svg('<path d="M8 3v10M3 8h10"/>', 16)}Add a server`});
+  innerHTML: `${svg('<path d="M8 3v10M3 8h10"/>', 16)}${esc(t('Add a server'))}`});
 function render(animate) {
   if (dragging) return;  // never move cards under the user's pointer; the next refresh catches up
   const grid = $('#grid'), list = arrange(servers);
@@ -342,13 +314,14 @@ async function refresh() {
   try {
     servers = await api('api/servers');
     const bad = servers.filter(s => s.online === false || s.alerts.critical + s.alerts.warning).length;
-    $('#summary').textContent = `${servers.length} server${servers.length === 1 ? '' : 's'} · ` + (bad ? `${bad} need${bad === 1 ? 's' : ''} attention` : 'all healthy');
+    $('#summary').textContent = t(servers.length === 1 ? '{n} server' : '{n} servers', {n: servers.length}) + ' · '
+      + (bad ? t(bad === 1 ? '{n} needs attention' : '{n} need attention', {n: bad}) : t('all healthy'));
     render();
     const title = bad ? `(${bad}) Monitorr` : 'Monitorr';
     if (document.title !== title) document.title = title;
   } catch (e) {
     if (e.message === 'signed out') return;
-    $('#summary').textContent = "Can't reach Monitorr. Retrying…";
+    $('#summary').textContent = t("Can't reach Monitorr. Retrying…");
   }
   timer = setTimeout(refresh, 5000);
 }
@@ -364,13 +337,13 @@ function move(id, dir) {
   const ids = arrange(servers).map(s => s.id), i = ids.indexOf(id);
   [ids[i], ids[i + dir]] = [ids[i + dir], ids[i]];
   prefs.order = ids; savePrefs(); render(true);
-  announce(`${servers.find(s => s.id === id).name} moved to position ${i + dir + 1} of ${ids.length}`);
+  announce(t('{name} moved to position {n} of {total}', {name: servers.find(s => s.id === id).name, n: i + dir + 1, total: ids.length}));
 }
 function togglePin(id) {
   prefs.pinned = isPinned(id) ? prefs.pinned.filter(x => x !== id) : [...prefs.pinned, id];
   prefs.order = arrange(servers).map(s => s.id);
   savePrefs(); render(true);
-  announce(`${servers.find(s => s.id === id).name} ${isPinned(id) ? 'pinned to the top' : 'unpinned'}`);
+  announce(t(isPinned(id) ? '{name} pinned to the top' : '{name} unpinned', {name: servers.find(s => s.id === id).name}));
 }
 
 // drag by the grip; works with mouse, pen and touch (pointer events)
@@ -407,7 +380,7 @@ function drop() {
   setTimeout(() => { d.el.style.transition = ''; }, 220);
   if (d.moved) {
     prefs.order = [...grid.querySelectorAll('.card')].map(c => c.dataset.id); savePrefs();
-    const ids = prefs.order; announce(`${servers.find(s => s.id === d.id)?.name} moved to position ${ids.indexOf(d.id) + 1} of ${ids.length}`);
+    const ids = prefs.order; announce(t('{name} moved to position {n} of {total}', {name: servers.find(s => s.id === d.id)?.name, n: ids.indexOf(d.id) + 1, total: ids.length}));
   }
 }
 grid.addEventListener('pointerup', drop);
@@ -424,10 +397,10 @@ function openMenu(btn, id) {
   const srv = servers.find(s => s.id === id); if (!srv) return;
   menuFor = {id, btn};
   const item = (act, icon, label, ok = true, cls = '') => `<button role="menuitem" data-act="${act}" class="${cls}"${ok ? '' : ' disabled'}>${svg(icon)}${label}</button>`;
-  menu.innerHTML = item('pin', I.pin, isPinned(id) ? 'Unpin' : 'Pin to the top')
-    + item('earlier', I.up, 'Move earlier', canMove(id, -1)) + item('later', I.down, 'Move later', canMove(id, 1))
-    + item('open', I.open, 'Open dashboard')
-    + (srv.local ? '' : '<hr>' + item('remove', I.trash, 'Remove server…', true, 'danger'));
+  menu.innerHTML = item('pin', I.pin, esc(t(isPinned(id) ? 'Unpin' : 'Pin to the top')))
+    + item('earlier', I.up, esc(t('Move earlier')), canMove(id, -1)) + item('later', I.down, esc(t('Move later')), canMove(id, 1))
+    + item('open', I.open, esc(t('Open dashboard')))
+    + (srv.local ? '' : '<hr>' + item('remove', I.trash, esc(t('Remove server…')), true, 'danger'));
   menu.hidden = false;
   const r = btn.getBoundingClientRect();
   menu.style.top = `${r.bottom + scrollY + 6}px`;
@@ -455,7 +428,7 @@ menu.addEventListener('click', async e => {
   else if (b.dataset.act === 'later') move(id, 1);
   else if (b.dataset.act === 'open') location.href = 'server.html?id=' + encodeURIComponent(id);
   else if (b.dataset.act === 'remove') {
-    if (!confirm(`Stop monitoring ${srv.name}? Its service checks are deleted too. The agent keeps running on that server until you uninstall it.`)) return;
+    if (!confirm(t('Stop monitoring {name}? Its service checks are deleted too. The agent keeps running on that server until you uninstall it.', {name: srv.name}))) return;
     try { await api('api/servers/' + encodeURIComponent(id), {method: 'DELETE'}); } catch (err) { alert(err.message); }
     refresh();
   }
@@ -477,58 +450,15 @@ $('#add-btn').addEventListener('click', openAdd);
 $('#f-cancel').addEventListener('click', () => dlg.close());
 form.addEventListener('submit', async e => {
   e.preventDefault();
-  const go = $('#f-go'); go.disabled = true; go.textContent = 'Connecting…'; $('#f-err').textContent = '';
+  const go = $('#f-go'); go.disabled = true; go.textContent = t('Connecting…'); $('#f-err').textContent = '';
   try {
     await api('api/servers', {method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({name: $('#f-name').value, address: $('#f-url').value, pairing: $('#f-token').value})});
     dlg.close(); refresh();
-  } catch (err) { $('#f-err').textContent = err.message; }
-  go.disabled = false; go.textContent = 'Connect and add';
+  } catch (err) { $('#f-err').textContent = t(err.message); }
+  go.disabled = false; go.textContent = t('Connect and add');
 });
 
-/* ---------------- security: two-factor sign-in and activity ---------------- */
-const secDlg = $('#sec-dlg');
-const when = t => new Date(t * 1000).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
-async function openSecurity() {
-  let s;
-  try { s = await api('api/security'); } catch (e) { alert(e.message); return; }
-  $('#sec-user').textContent = s.user;
-  $('#sec-act').innerHTML = s.activity.length ? s.activity.map(e => `<div><time>${esc(when(e.ts))}</time><span>${esc(e.title)}</span><small>${esc(e.detail)}</small></div>`).join('')
-    : '<div class="empty">Nothing yet. Sign-ins from new addresses and changes to servers, checks and containers appear here (and on ntfy).</div>';
-  renderTfa(s.totp);
-  if (!secDlg.open) secDlg.showModal();
-}
-function renderTfa(on) {
-  $('#tfa').innerHTML = on
-    ? `<div class="state on"><i></i>On. Signing in needs a code from your authenticator app.</div>
-       <div class="inline"><input id="tfa-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="Current code" aria-label="Current code"><button type="button" class="btn" id="tfa-off">Turn off</button></div><p class="err" id="tfa-err"></p>`
-    : `<div class="state"><i></i>Off. With it on, a stolen password alone can't get in.</div>
-       <div><button type="button" class="btn primary" id="tfa-start">Turn on</button></div><p class="err" id="tfa-err"></p>`;
-}
-async function tfaCall(url, body) {
-  $('#tfa-err').textContent = '';
-  try { return await api(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})}); }
-  catch (e) { $('#tfa-err').textContent = e.message; return null; }
-}
-$('#tfa').addEventListener('click', async e => {
-  if (e.target.id === 'tfa-start') {
-    const r = await tfaCall('api/2fa/start'); if (!r) return;
-    $('#tfa').innerHTML = `<div>1. In your authenticator app (Google Authenticator, 1Password, Aegis…), add an account with this key, or <a href="${esc(r.uri)}">open it in the app</a> on your phone:</div>
-      <div class="secret">${esc(r.secret.replace(/(.{4})/g, '$1 ').trim())}</div>
-      <div>2. Enter the 6-digit code it shows:</div>
-      <div class="inline"><input id="tfa-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" aria-label="Code"><button type="button" class="btn primary" id="tfa-confirm">Confirm</button></div><p class="err" id="tfa-err"></p>`;
-    $('#tfa-code').focus();
-  } else if (e.target.id === 'tfa-confirm') {
-    if (await tfaCall('api/2fa/confirm', {code: $('#tfa-code').value})) openSecurity();
-  } else if (e.target.id === 'tfa-off') {
-    if (await tfaCall('api/2fa/disable', {code: $('#tfa-code').value})) openSecurity();
-  }
-});
-$('#sec-btn').addEventListener('click', openSecurity);
-$('#sec-close').addEventListener('click', () => secDlg.close());
-
-$('#logout').addEventListener('click', async () => { await fetch('api/logout', {method: 'POST'}).catch(() => {}); location.href = 'login.html'; });
-api('api/info').then(i => { $('#logout').hidden = !i.auth; }).catch(() => {});
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 api('api/prefs/overview').then(p => { prefs = p; }).catch(() => {}).finally(() => { setDensity(prefs.density); refresh(); });
 </script>
