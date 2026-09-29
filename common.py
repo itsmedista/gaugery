@@ -38,8 +38,9 @@ async def read_json(request: Request):
     return body
 
 
-def harden(app, page_csp=None):
-    """Outermost middleware (add it after all others): turn away bad requests, add security headers."""
+def harden(app, page_csp=None, hsts=True):
+    """Outermost middleware (add it after all others): turn away bad requests, add security headers.
+    hsts=False for a self-signed certificate: HSTS would stop browsers from letting you click past its warning."""
 
     @app.middleware("http")
     async def _harden(request: Request, call_next):
@@ -53,6 +54,6 @@ def harden(app, page_csp=None):
             resp.headers.setdefault("Content-Security-Policy", API_CSP)
         if request.url.path.startswith("/api/"):
             resp.headers.setdefault("Cache-Control", "no-store")
-        if request.url.scheme == "https":
+        if hsts and request.url.scheme == "https":
             resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return resp

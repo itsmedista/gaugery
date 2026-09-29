@@ -33,6 +33,8 @@ LOCAL_AGENT = os.environ.get("LOCAL_AGENT", "").strip()        # unix:/run/monit
 TRUSTED_PROXIES = os.environ.get("TRUSTED_PROXIES", "").strip()  # only these may set X-Forwarded-For
 ALLOW_HTTP_LOGIN = os.environ.get("ALLOW_HTTP_LOGIN", "").lower() in ("1", "true", "yes")
 TLS = os.environ.get("TLS", "").lower()                         # "auto": serve HTTPS with its own certificate
+OWN_CERT = bool(os.environ.get("TLS_CERT") and os.environ.get("TLS_KEY"))
+SELF_SIGNED = TLS == "auto" and not OWN_CERT                   # no HSTS then: you must be able to accept the certificate
 PUBLIC = {"/login.html", "/icon.svg", "/api/login", "/api/auth-config", "/healthz"}
 # Where signing in over plain HTTP is still allowed: this machine, private networks, Tailscale.
 NEARBY = [ipaddress.ip_network(n) for n in ("127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
@@ -150,7 +152,7 @@ def create_app():
             return JSONResponse({"detail": "Not signed in"}, status_code=401)
         return RedirectResponse("login.html", status_code=303)
 
-    harden(app, PageCSP(HERE / "static"))
+    harden(app, PageCSP(HERE / "static"), hsts=not SELF_SIGNED)
 
     def ip_of(request):
         return request.client.host if request.client else "?"
@@ -453,7 +455,7 @@ def serve():
     kw = {"host": HOST, "port": PORT, "log_level": "warning", "proxy_headers": bool(TRUSTED_PROXIES)}
     if TRUSTED_PROXIES:
         kw["forwarded_allow_ips"] = TRUSTED_PROXIES
-    if os.environ.get("TLS_CERT") and os.environ.get("TLS_KEY"):
+    if OWN_CERT:
         kw.update(ssl_certfile=os.environ["TLS_CERT"], ssl_keyfile=os.environ["TLS_KEY"])
     elif TLS == "auto":
         cert, key = tlsutil.ensure_cert(app.state.hub.data_dir, "monitorr-hub")
