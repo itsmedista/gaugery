@@ -47,16 +47,29 @@ connections were encrypted": remove them and add them again with their pairing c
 
     sudo ./install.sh
 
-It asks for a password, then runs two services: `monitorr` (web interface, as the
-unprivileged `monitorr` user, heavily sandboxed) and `monitorr-agent` (root, reached only
-over `/run/monitorr/agent.sock`). Settings live in `/etc/monitorr.env`, readable by root
-only; after changes: `sudo systemctl restart monitorr-agent monitorr`.
+It first asks a few questions and writes the answers to `/etc/monitorr.env`, so you
+don't have to edit it by hand. Press Enter to take each suggestion:
+
+- **Where to open Monitorr:** over Tailscale only, behind Tailscale serve or a reverse
+  proxy on the same machine, or from your whole LAN (then it offers HTTPS with its own
+  certificate)
+- the **port** and your **username**, then your **password**
+- the **host names** you'll use in the browser (`ALLOWED_HOSTS`)
+- **container logs** and **start/stop/restart**: none, all, or a list of containers
+- **drive health (SMART)**, and an **ntfy** topic (and token) for phone alerts
+
+Then it runs two services: `monitorr` (web interface, as the unprivileged `monitorr` user,
+heavily sandboxed) and `monitorr-agent` (root, reached only over `/run/monitorr/agent.sock`).
+Running it again later updates Monitorr and keeps your settings. To answer the questions
+again: `sudo ./install.sh --reconfigure`. To change a setting by hand: edit
+`/etc/monitorr.env` (readable by root only), then
+`sudo systemctl restart monitorr-agent monitorr`.
 
 ## Monitoring more servers
 
 On each extra server, install just the agent:
 
-    sudo ./install.sh --agent                              # systemd
+    sudo ./install.sh --agent                              # systemd (asks a few questions)
     ./docker-setup.sh --agent && docker compose -f docker-compose.agent.yml up -d   # Docker
 
 It prints an address and a **pairing code**. On your main Monitorr click **Add server**,
