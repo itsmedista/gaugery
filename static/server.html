@@ -382,6 +382,7 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
   </form>
 </dialog>
 
+<script src="reauth.js"></script>
 <script src="gauge.js"></script>
 <script>
 'use strict';
@@ -396,7 +397,7 @@ const VIRT = {none:'Bare metal', microsoft:'Hyper-V', kvm:'KVM', qemu:'QEMU', vm
 
 // Which server this page shows: the one Monitorr runs on, or a remote agent relayed by it.
 const SID = new URLSearchParams(location.search).get('id') || 'local';
-const API = SID === 'local' ? 'api/' : 'api/s/' + encodeURIComponent(SID) + '/';
+const API = 'api/s/' + encodeURIComponent(SID) + '/';  // every server's data, this one's too, comes from its agent via the hub
 const $ = (s, r = document) => r.querySelector(s);
 // A remote server's data is untrusted: numbers must be numbers, and only known words go into class names.
 const num = v => typeof v === 'number' && isFinite(v) ? v : '–';
@@ -718,9 +719,10 @@ function renderCores(s) {
   for (let i = 0; i < n; i++) { const v = s['core:' + i] ?? 0; const c = el.children[i]; c.title = `Thread ${i}: ${fmtPct(v)}`; const b = c.firstChild; b.style.height = clamp(v, 0, 100) + '%'; b.style.background = heat(v); }
 }
 
-function smartHTML(d, smartAvailable) {
+function smartHTML(d, smartAvailable, smartEnabled) {
   if (d.network) return '<span class="smart na"><i></i>Network share</span>';
   const sm = d.smart;
+  if (!sm && smartEnabled === false) return '<span class="smart na" title="Drive health needs raw disk access, so it is off unless SMART=true is set on this server"><i></i>SMART off</span>';
   if (!sm) return `<span class="smart na" title="${smartAvailable ? 'No SMART data for this device yet' : 'Install smartmontools to read drive health'}"><i></i>${smartAvailable ? 'No SMART data' : 'smartctl missing'}</span>`;
   if (sm.status === 'unavailable') return `<span class="smart na" title="${esc(sm.reason || '')}"><i></i>No SMART</span>`;
   const t = sm.temp != null ? ` ${Math.round(sm.temp)}°C` : '';
@@ -770,7 +772,7 @@ function renderDrives(st) {
     }
     const r = d.disk ? lastS[`disk:${d.disk}:r`] : null, w = d.disk ? lastS[`disk:${d.disk}:w`] : null;
     $('.c-io', e).innerHTML = d.disk ? `<span>Read <b>${fmtRate(r)}</b></span><span>Write <b>${fmtRate(w)}</b></span>` : '<span class="sub">No block device stats</span>';
-    $('.c-smart', e).innerHTML = `<span class="sub">Health${d.disk ? ' of ' + esc(d.disk) : ''}</span>${smartHTML(d, st.smart_available)}`;
+    $('.c-smart', e).innerHTML = `<span class="sub">Health${d.disk ? ' of ' + esc(d.disk) : ''}</span>${smartHTML(d, st.smart_available, st.smart_enabled)}`;
     if (d.smart && (d.smart.status === 'warning' || d.smart.status === 'failed')) flagged++;
     $('.c-fore', e).innerHTML = `<span class="sub">Full in</span><b>${foreText(d)}</b>`;
   }
@@ -1081,6 +1083,8 @@ $('#c-delete').addEventListener('click', async () => {
 /* ---------------- container logs and actions ---------------- */
 // What this server allows (each server decides: ALLOW_LOGS, ALLOW_CONTAINER_ACTIONS).
 const feat = () => (mode === 'server' && info?.features) || {};
+// each server allows logs/actions for all containers, a list of them, or none
+const allowed = (what, name) => { const f = feat(); return !!f[what] && (!Array.isArray(f[what + '_for']) || f[what + '_for'].includes(name)); };
 const logs = {ctr: '', q: '', lines: [], es: null, at: null, seq: 0, truncated: false};
 const MAX_SHOWN = 5000;
 const ICON = {
@@ -1100,7 +1104,7 @@ function logWindow() {
 }
 function fillContainerPicker(st) {
   if (!feat().logs) return;
-  const cs = st.containers || [], sel = $('#log-ctr'), names = cs.map(c => c.name);
+  const cs = (st.containers || []).filter(c => allowed('logs', c.name)), sel = $('#log-ctr'), names = cs.map(c => c.name);
   if ([...sel.options].map(o => o.value).join('|') !== names.join('|')) {
     sel.innerHTML = names.length ? names.map(n => `<option>${esc(n)}</option>`).join('') : '<option value="">No containers</option>';
     if (names.includes(logs.ctr)) sel.value = logs.ctr;
@@ -1190,8 +1194,8 @@ $('#log-latest').addEventListener('click', () => { logs.at = null; loadLogs(); }
 // buttons on each container row
 function ctrButtons(c) {
   const f = feat();
-  let h = f.logs ? `<button class="icon-btn" data-logs="${esc(c.name)}" title="Logs of ${esc(c.name)}" aria-label="Logs of ${esc(c.name)}">${icon('logs')}</button>` : '';
-  if (f.actions) {
+  let h = allowed('logs', c.name) ? `<button class="icon-btn" data-logs="${esc(c.name)}" title="Logs of ${esc(c.name)}" aria-label="Logs of ${esc(c.name)}">${icon('logs')}</button>` : '';
+  if (allowed('actions', c.name)) {
     const b = (act, label) => `<button class="icon-btn act-${act}" data-act="${act}" data-ctr="${esc(c.name)}" title="${label} ${esc(c.name)}" aria-label="${label} ${esc(c.name)}">${icon(act)}</button>`;
     const self = /monitorr/i.test(c.image || '');  // the server refuses to stop Monitorr itself
     h += c.state === 'running' || c.state === 'restarting' ? b('restart', 'Restart') + (self ? '' : b('stop', 'Stop')) : b('start', 'Start');
@@ -1233,7 +1237,7 @@ async function boot() {
     mode = 'server';
   } catch (e) {
     if (e.message === 'signed out') return;
-    if (SID !== 'local') {  // a remote agent is down: say so and keep trying, never show demo data
+    if (location.protocol !== 'file:') {  // the agent is down: say so and keep trying, never show demo data
       $('#host').textContent = 'Offline'; $('#hostsub').textContent = e.message;
       setConn('offline'); setTimeout(boot, 10000); return;
     }

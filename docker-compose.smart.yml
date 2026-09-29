@@ -1,0 +1,16 @@
+# Drive health (SMART). It needs raw access to your disks, so it's opt-in:
+#   docker compose -f docker-compose.yml -f docker-compose.smart.yml up -d
+# (or with docker-compose.agent.yml on an agent-only server)
+#
+# List your disks under devices: ls /dev/sd? /dev/nvme?n?  Only these are exposed, not the whole /dev.
+services:
+  monitorr-agent:
+    environment:
+      SMART: "true"
+    cap_add:
+      - SYS_RAWIO        # SATA/SAS disks
+      - SYS_ADMIN        # NVMe drives; remove if you have none
+    devices:
+      - /dev/sda
+      # - /dev/sdb
+      # - /dev/nvme0n1

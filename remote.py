@@ -1,17 +1,28 @@
-"""Remote servers for Monitorr: each one runs Monitorr as an agent (AGENT_TOKEN set), and this
-instance polls their summaries for the overview and relays their API to the dashboard."""
+"""The servers a Monitorr hub watches. Each runs the Monitorr agent; the hub polls their summaries
+for the overview and relays their API to the dashboard.
+
+This machine's agent is reached over a Unix socket (LOCAL_AGENT). Other agents are reached over
+TLS, trusting only the certificate whose fingerprint came with their pairing code.
+"""
 import asyncio
+import hmac
 import math
 import secrets
+import ssl
 import time
+from urllib.parse import urlsplit
 
 import httpx
 
+import netguard
+import tlsutil
+
 POLL_SECONDS = 5
-# The only agent endpoints the hub relays (and the only ones an agent token unlocks).
-# Each agent still decides for itself whether logs and container actions are allowed.
+# The only agent endpoints the hub relays for the dashboard. Each agent still decides for
+# itself whether logs and container actions are allowed, and for which containers.
 AGENT_PATHS = {"info", "recent", "state", "history", "stream", "summary", "logs", "logstream", "container-action"}
 STREAM_PATHS = {"stream", "logstream"}
+TIMEOUT = httpx.Timeout(8, connect=4)
 
 
 class AgentError(Exception):
@@ -47,38 +58,94 @@ def clean_summary(j):
 
 
 class Remotes:
-    def __init__(self, db, db_lock):
+    def __init__(self, db, db_lock, local_url=None, local_token=None):
         self.db, self.db_lock = db, db_lock
         with self.db_lock:
             self.db.execute("CREATE TABLE IF NOT EXISTS servers "
-                            "(id TEXT PRIMARY KEY, name TEXT, url TEXT, token TEXT, added REAL)")
+                            "(id TEXT PRIMARY KEY, name TEXT, url TEXT, token TEXT, added REAL, cert TEXT)")
+            cols = {r[1] for r in self.db.execute("PRAGMA table_info(servers)")}
+            if "cert" not in cols:
+                self.db.execute("ALTER TABLE servers ADD COLUMN cert TEXT")
             self.db.commit()
-            rows = self.db.execute("SELECT id, name, url, token FROM servers ORDER BY added").fetchall()
-        self.servers = {r[0]: {"id": r[0], "name": r[1], "url": r[2], "token": r[3]} for r in rows}
+            rows = self.db.execute("SELECT id, name, url, token, cert FROM servers ORDER BY added").fetchall()
+        self.servers = {}
+        if local_url:
+            self.servers["local"] = {"id": "local", "name": None, "url": local_url, "token": local_token,
+                                     "cert": None, "local": True}
+        for r in rows:
+            self.servers[r[0]] = {"id": r[0], "name": r[1], "url": r[2], "token": r[3], "cert": r[4], "local": False}
         self.status = {}  # id -> {"online", "error", "summary", "checked"}
-        self.client = httpx.AsyncClient(timeout=httpx.Timeout(8, connect=4))
+        self._clients = {}
+
+    def name(self, sid):
+        srv = self.servers.get(sid)
+        if not srv:
+            return None
+        if srv["local"]:
+            return ((self.status.get(sid) or {}).get("summary") or {}).get("hostname") or "This server"
+        return srv["name"]
 
     # ---------- registry ----------
-    async def add(self, name, url, token):
-        name, url, token = name.strip(), url.strip().rstrip("/"), token.strip()
-        if not name or not token:
-            raise AgentError("Name and token are required")
-        if not url.startswith(("http://", "https://")):
-            raise AgentError("The address must start with http:// or https://")
-        srv = {"id": secrets.token_hex(4), "name": name, "url": url, "token": token}
-        summary = await self.fetch_summary(srv)  # refuse servers we can't read
+    async def add(self, name, address, pairing):
+        name = name.strip()[:60]
+        if not name:
+            raise AgentError("Give the server a name")
+        try:
+            fingerprint, token = tlsutil.parse_pairing(pairing)
+        except ValueError as e:
+            raise AgentError(str(e)) from None
+        address = address.strip().rstrip("/")
+        if "://" not in address:
+            address = "https://" + address
+        u = urlsplit(address)
+        if u.scheme != "https" or not u.hostname:
+            raise AgentError("Use the address the agent printed, like https://192.168.1.20:8088")
+        port = u.port or 8088
+        host = f"[{u.hostname}]" if ":" in u.hostname else u.hostname
+        url = f"https://{host}:{port}"
+        try:
+            ip = (await netguard.resolve(u.hostname, port, limit_to_allowed=False))[0]
+            der = await tlsutil.fetch_cert(ip, port)
+        except netguard.Blocked as e:
+            raise AgentError(str(e)) from None
+        except (OSError, asyncio.TimeoutError, ssl.SSLError) as e:
+            raise AgentError(f"Can't reach {url} ({type(e).__name__}). Is the agent running, and is the port open?") from None
+        if not hmac.compare_digest(tlsutil.fingerprint_der(der), fingerprint):
+            raise AgentError("The certificate at this address doesn't match the pairing code. Check the address; "
+                             "if it's right, something between you and the agent is intercepting the connection.")
+        srv = {"id": secrets.token_hex(4), "name": name, "url": url, "token": token,
+               "cert": ssl.DER_cert_to_PEM_cert(der), "local": False}
+        try:
+            summary = await self.fetch_summary(srv)  # proves the token too
+        except AgentError:
+            await self._drop_client(srv["id"])
+            raise
         with self.db_lock:
-            self.db.execute("INSERT INTO servers VALUES (?, ?, ?, ?, ?)",
-                            (srv["id"], name, url, token, time.time()))
+            self.db.execute("INSERT INTO servers (id, name, url, token, added, cert) VALUES (?, ?, ?, ?, ?, ?)",
+                            (srv["id"], name, url, token, time.time(), srv["cert"]))
             self.db.commit()
         self.servers[srv["id"]] = srv
         self.status[srv["id"]] = {"online": True, "error": None, "summary": summary, "checked": time.time()}
         return srv["id"]
 
-    def remove(self, sid):
-        if self.servers.pop(sid, None) is None:
+    def import_rows(self, rows):
+        """Servers from before encrypted connections: kept so their checks and place survive,
+        but they must be paired again before the hub talks to them."""
+        with self.db_lock:
+            for r in rows:
+                self.db.execute("INSERT OR IGNORE INTO servers (id, name, url, token, added, cert) "
+                                "VALUES (?, ?, ?, ?, ?, NULL)", (r["id"], r["name"], r["url"], r["token"], r["added"]))
+                self.servers.setdefault(r["id"], {"id": r["id"], "name": r["name"], "url": r["url"],
+                                                  "token": r["token"], "cert": None, "local": False})
+            self.db.commit()
+
+    async def remove(self, sid):
+        srv = self.servers.get(sid)
+        if not srv or srv["local"]:
             return False
+        del self.servers[sid]
         self.status.pop(sid, None)
+        await self._drop_client(sid)
         with self.db_lock:
             self.db.execute("DELETE FROM servers WHERE id = ?", (sid,))
             self.db.commit()
@@ -88,10 +155,32 @@ class Remotes:
         out = []
         for sid, srv in self.servers.items():
             st = self.status.get(sid, {"online": None, "error": None, "summary": None, "checked": None})
-            out.append({"id": sid, "name": srv["name"], "url": srv["url"], "local": False, **st})
+            out.append({"id": sid, "name": self.name(sid), "url": None if srv["local"] else srv["url"],
+                        "local": srv["local"], **st})
         return out
 
     # ---------- talking to agents ----------
+    def _client(self, srv):
+        c = self._clients.get(srv["id"])
+        if c:
+            return c
+        url = srv["url"]
+        if url.startswith("unix:"):
+            c = httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(uds=url[5:]), base_url="http://agent",
+                                  timeout=TIMEOUT)
+        elif url.startswith("https://") and srv.get("cert"):
+            c = httpx.AsyncClient(verify=tlsutil.pinned_context(srv["cert"]), base_url=url, timeout=TIMEOUT)
+        else:
+            raise AgentError("This server was added before connections were encrypted. Remove it and add it "
+                             "again with the pairing code its agent prints.")
+        self._clients[srv["id"]] = c
+        return c
+
+    async def _drop_client(self, sid):
+        c = self._clients.pop(sid, None)
+        if c:
+            await c.aclose()
+
     def _headers(self, srv):
         return {"Authorization": f"Bearer {srv['token']}"}
 
@@ -104,49 +193,45 @@ class Remotes:
                 detail = r.json().get("detail")  # the agent's own explanation, e.g. "No container named x"
             except Exception:  # noqa: BLE001
                 detail = None
-            raise AgentError(detail or ("No Monitorr agent answered at this address" if r.status_code == 404
-                                        else f"The agent answered {r.status_code}"))
+            raise AgentError(str(detail)[:300] if detail else (
+                "No Monitorr agent answered at this address" if r.status_code == 404
+                else f"The agent answered {r.status_code}"))
+
+    async def _send(self, srv, method, path, **kw):
+        try:
+            r = await self._client(srv).request(method, f"/api/{path}", headers=self._headers(srv), **kw)
+        except httpx.HTTPError as e:
+            if "CERTIFICATE_VERIFY_FAILED" in str(e):  # not the certificate it was paired with
+                raise AgentError(f"{srv['name'] or 'The agent'} presented a different certificate than when it "
+                                 "was paired, so Monitorr refused the connection.") from None
+            raise AgentError(f"Can't reach {srv['name'] or 'this server'} ({type(e).__name__})") from None
+        self._check(r)
+        return r
 
     async def fetch_summary(self, srv):
-        try:
-            r = await self.client.get(f"{srv['url']}/api/summary", headers=self._headers(srv))
-        except httpx.HTTPError as e:
-            raise AgentError(f"Can't reach {srv['url']} ({type(e).__name__})") from None
-        self._check(r)
+        r = await self._send(srv, "GET", "summary")
         try:
             return clean_summary(r.json())
         except ValueError:
             raise AgentError("The address answered, but not like a Monitorr agent") from None
 
     async def get(self, sid, path, params):
-        srv = self.servers[sid]
-        try:
-            r = await self.client.get(f"{srv['url']}/api/{path}", params=params, headers=self._headers(srv))
-        except httpx.HTTPError as e:
-            raise AgentError(f"Can't reach {srv['name']} ({type(e).__name__})") from None
-        self._check(r)
-        return r
+        return await self._send(self.servers[sid], "GET", path, params=params)
 
     async def post(self, sid, path, body):
-        srv = self.servers[sid]
-        try:
-            r = await self.client.post(f"{srv['url']}/api/{path}", json=body, headers=self._headers(srv),
-                                       timeout=httpx.Timeout(45, connect=4))
-        except httpx.HTTPError as e:
-            raise AgentError(f"Can't reach {srv['name']} ({type(e).__name__})") from None
-        self._check(r)
-        return r
+        return await self._send(self.servers[sid], "POST", path, json=body, timeout=httpx.Timeout(45, connect=4))
 
     async def stream(self, sid, path="stream", params=None):
         srv = self.servers[sid]
         # logs can go quiet for a long time, so only the metrics stream has a read timeout
         read = 30 if path == "stream" else None
-        req = self.client.build_request("GET", f"{srv['url']}/api/{path}", params=params, headers=self._headers(srv),
-                                        timeout=httpx.Timeout(8, connect=4, read=read))
+        client = self._client(srv)
+        req = client.build_request("GET", f"/api/{path}", params=params, headers=self._headers(srv),
+                                   timeout=httpx.Timeout(8, connect=4, read=read))
         try:
-            resp = await self.client.send(req, stream=True)
+            resp = await client.send(req, stream=True)
         except httpx.HTTPError as e:
-            raise AgentError(f"Can't reach {srv['name']} ({type(e).__name__})") from None
+            raise AgentError(f"Can't reach {srv['name'] or 'this server'} ({type(e).__name__})") from None
         if resp.status_code != 200:
             await resp.aread()
             await resp.aclose()
@@ -172,3 +257,7 @@ class Remotes:
             st = {"online": False, "error": str(e), "summary": prev.get("summary")}
         if sid in self.servers:
             self.status[sid] = {**st, "checked": time.time()}
+
+    async def close(self):
+        for sid in list(self._clients):
+            await self._drop_client(sid)

@@ -44,6 +44,10 @@ button:disabled{opacity:.6;cursor:default}
     <input id="user" name="user" autocomplete="username" autocapitalize="none" spellcheck="false" required>
     <label for="password">Password</label>
     <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <div id="code-row" hidden>
+      <label for="code">Code from your authenticator app</label>
+      <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7">
+    </div>
     <button id="go">Sign in</button>
     <p class="err" id="err" role="alert"></p>
   </form>
@@ -51,12 +55,17 @@ button:disabled{opacity:.6;cursor:default}
 <script>
 const f = document.getElementById('f'), err = document.getElementById('err'), go = document.getElementById('go');
 document.getElementById('user').focus();
+// already signed in (e.g. arriving from a link in another app)? go straight in
+fetch('api/info', {cache: 'no-store'}).then(r => { if (r.ok) location.replace('./'); }).catch(() => {});
+fetch('api/auth-config').then(r => r.json()).then(c => {
+  if (c.totp) { document.getElementById('code-row').hidden = false; document.getElementById('code').required = true; }
+}).catch(() => {});
 f.addEventListener('submit', async e => {
   e.preventDefault();
   go.disabled = true; err.textContent = '';
   try {
     const r = await fetch('api/login', {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({user: f.user.value.trim(), password: f.password.value})});
+      body: JSON.stringify({user: f.user.value.trim(), password: f.password.value, code: f.code.value})});
     if (r.ok) { location.replace('./'); return; }
     err.textContent = (await r.json().catch(() => ({}))).detail || 'Sign in failed';
     f.password.select();
