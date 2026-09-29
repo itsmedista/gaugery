@@ -64,6 +64,34 @@ def new_token():
     print(secrets.token_urlsafe(32))
 
 
+def password_problem(new, user="", current=""):
+    """Why a new password isn't acceptable, or None."""
+    if len(new) < 10:
+        return "Use at least 10 characters."
+    if len(new) > 1024:
+        return "That's too long."
+    if new == current:
+        return "That's the password you have now."
+    if user and len(user) >= 3 and user.lower() in new.lower():
+        return "Don't use your username in your password."
+    return None
+
+
+# ---------- recovery codes: one-time stand-ins for a two-factor code, if the phone is lost ----------
+RECOVERY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"   # no 0/o, 1/l/i: easy to read back
+
+
+def recovery_codes(n=8):
+    """(codes to show once, their hashes to store). 10 random characters each (about 50 bits)."""
+    codes = ["".join(secrets.choice(RECOVERY_ALPHABET) for _ in range(10)) for _ in range(n)]
+    codes = [f"{c[:5]}-{c[5:]}" for c in codes]
+    return codes, [recovery_hash(c) for c in codes]
+
+
+def recovery_hash(code):
+    return hashlib.sha256("".join(ch for ch in str(code).lower() if ch.isalnum()).encode()).hexdigest()
+
+
 def token_ok(header, token):
     """A Bearer header carrying exactly this token."""
     if not token or not header or not header.startswith("Bearer "):
@@ -105,15 +133,21 @@ class Auth:
         self.user = os.environ.get("AUTH_USER", "admin")
         self.pw_hash = os.environ.get("AUTH_PASSWORD_HASH", "").strip()
         self._fails = {}
-        # Sessions are signed with a key derived from the password hash, so changing the
-        # password signs everyone out.
-        self._key = hmac.new(self._secret(Path(data_dir)), self.pw_hash.encode(), hashlib.sha256).digest()
+        self._master = self._secret(Path(data_dir))
+        self.generation = 0    # "sign out everywhere else" moves this on; older sessions stop working
+        self.set_hash(self.pw_hash)
         # Signed-out sessions (id -> expiry), so a copied cookie stops working at logout.
         self._revoked_path = Path(data_dir) / "revoked-sessions.json"
         try:
             self._revoked = {k: float(v) for k, v in json.loads(self._revoked_path.read_text()).items()}
         except (OSError, ValueError, AttributeError):
             self._revoked = {}
+
+    def set_hash(self, pw_hash):
+        """Use this password hash from now on. Sessions are signed with a key derived from it,
+        so changing the password signs everyone out."""
+        self.pw_hash = pw_hash
+        self._key = hmac.new(self._master, pw_hash.encode(), hashlib.sha256).digest()
 
     def check_config(self):
         if os.environ.get("AUTH_DISABLED"):
@@ -144,7 +178,7 @@ class Auth:
     def issue(self, exp=None):
         """A session cookie value; its auth time (now) is when the password was last entered."""
         exp = int(exp or time.time() + SESSION_DAYS * 86400)
-        payload = _b64(f"{self.user}|{exp}|{secrets.token_urlsafe(12)}|{int(time.time())}".encode())
+        payload = _b64(f"{self.user}|{exp}|{secrets.token_urlsafe(12)}|{int(time.time())}|{self.generation}".encode())
         return f"{payload}.{self._sign(payload)}"
 
     def session(self, token):
@@ -155,11 +189,11 @@ class Auth:
         if not hmac.compare_digest(sig.encode(), self._sign(payload).encode()):
             return None
         try:
-            user, exp, sid, auth_time = _unb64(payload).decode().split("|")
-            exp, auth_time = int(exp), int(auth_time)
+            user, exp, sid, auth_time, generation = _unb64(payload).decode().split("|")
+            exp, auth_time, generation = int(exp), int(auth_time), int(generation)
         except ValueError:
             return None
-        if user != self.user or exp <= time.time() or sid in self._revoked:
+        if user != self.user or exp <= time.time() or sid in self._revoked or generation != self.generation:
             return None
         return {"id": sid, "exp": exp, "auth_time": auth_time}
 

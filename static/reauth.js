@@ -3,6 +3,8 @@
 // request, so every page and button gets this without extra code.
 (() => {
   const plainFetch = window.fetch.bind(window);
+  const tr = (s, v) => (window.t ? window.t(s, v) : s);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
   let asking = null;  // one prompt at a time, shared by requests that need it together
 
   function ask() {
@@ -12,14 +14,14 @@
       try { totp = (await (await plainFetch('api/auth-config')).json()).totp; } catch { /* ask for the password only */ }
       const d = document.createElement('dialog');
       d.innerHTML = `<form method="dialog">
-        <h2>Confirm it's you</h2>
-        <p class="hint">Changes like this need your password from the last 15 minutes.</p>
-        <label for="ra-pw">Password</label>
+        <h2>${esc(tr("Confirm it's you"))}</h2>
+        <p class="hint">${esc(tr('Changes like this need your password from the last 15 minutes.'))}</p>
+        <label for="ra-pw">${esc(tr('Password'))}</label>
         <input id="ra-pw" type="password" autocomplete="current-password" required>
-        ${totp ? `<label for="ra-code">Code from your authenticator app</label>
-        <input id="ra-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required>` : ''}
+        ${totp ? `<label for="ra-code">${esc(tr('Code from your authenticator app, or a recovery code'))}</label>
+        <input id="ra-code" autocomplete="one-time-code" maxlength="12" required>` : ''}
         <p class="err" role="alert"></p>
-        <div class="row"><button type="button" class="btn" data-cancel>Cancel</button><button class="btn primary">Confirm</button></div>
+        <div class="row"><button type="button" class="btn" data-cancel>${esc(tr('Cancel'))}</button><button class="btn primary">${esc(tr('Confirm'))}</button></div>
       </form>`;
       document.body.appendChild(d);
       const finish = ok => { d.close(); d.remove(); asking = null; resolve(ok); };
@@ -30,7 +32,7 @@
         const r = await plainFetch('api/reauth', {method: 'POST', headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({password: d.querySelector('#ra-pw').value, code: d.querySelector('#ra-code')?.value || ''})});
         if (r.ok) return finish(true);
-        d.querySelector('.err').textContent = (await r.json().catch(() => ({}))).detail || "That didn't work";
+        d.querySelector('.err').textContent = tr((await r.json().catch(() => ({}))).detail || "That didn't work");
       });
       d.showModal();
       d.querySelector('#ra-pw').focus();
