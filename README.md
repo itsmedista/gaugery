@@ -15,9 +15,10 @@ Monitorr is two parts, so the part you open in a browser never has power over yo
   itself with a secret token. On the same machine they talk over a Unix socket (no port).
   On other servers the agent listens on HTTPS with its own certificate, which the web
   interface pins when you pair it.
-- With Docker, the agent reaches Docker through a **socket proxy** that allows listing
-  containers, their stats and logs (and start/stop/restart only if you turn that on).
-  Nothing that could create containers or take over the host gets through.
+- With Docker, the agent reaches Docker through a **socket proxy** that only allows reading
+  (containers, their stats and logs). If you turn on container actions, a second proxy
+  allows exactly start, stop and restart. Nothing that could create containers, run
+  commands in them or otherwise take over the host gets through either one.
 
 ## Install with Docker (recommended)
 
@@ -106,7 +107,7 @@ further to your own networks.
 Both are off until you allow them, per server and per container:
 
     ALLOW_LOGS=all                 # or: plex,nginx
-    ALLOW_CONTAINER_ACTIONS=plex   # start/stop/restart buttons; with Docker also DOCKER_PROXY_ACTIONS=1
+    ALLOW_CONTAINER_ACTIONS=plex   # start/stop/restart buttons; with Docker also COMPOSE_PROFILES=actions
 
 Each server's page then has a **Logs** section: search, a live tail, and a time window
 that follows the range buttons. **Click any chart** to jump to the logs from that moment.
@@ -169,9 +170,9 @@ What Monitorr does for you:
   from Monitorr's own pages as JSON.
 - **Remote servers are untrusted:** the web interface checks and trims what agents send,
   never serves an agent's reply as a page, and the pages escape everything.
-- **Supply chain:** the base images (Python, socket proxy) are pinned by digest, so a build
-  never picks up a changed image. Python packages have minimum versions in `requirements.txt`;
-  locking them to exact versions with hashes is still to do.
+- **Supply chain:** the base images (Python, socket proxy) are pinned by digest, and every
+  Python package, dependencies included, by exact version and hash (`requirements.txt`).
+  A tampered or swapped package fails the install.
 
 What stays your job:
 
@@ -179,7 +180,8 @@ What stays your job:
 - **Set `ALLOWED_HOSTS`** to the names and IPs you open it with (blocks DNS rebinding).
 - **Only allow logs and actions where you need them.**
 - **Update now and then:** pull the new base image and put its digest in the Dockerfile
-  (the command is in the comment there), then `docker compose up -d --build`.
+  (the command is in the comment there), refresh the package lock (the command is at the top of
+  `requirements.txt`), then `docker compose up -d --build`.
 
 ## Test changes in the sandbox first
 
