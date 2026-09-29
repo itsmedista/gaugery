@@ -16,6 +16,11 @@ import sys
 
 os.umask(0o077)  # everything Monitorr writes (databases, keys, tokens) is for its own user only
 
+if hasattr(__import__("signal"), "SIGUSR1"):  # `docker kill -s USR1 <container>` prints every thread's stack
+    import faulthandler
+    import signal
+    faulthandler.register(signal.SIGUSR1, all_threads=True)
+
 
 def role():
     for arg in sys.argv[1:]:

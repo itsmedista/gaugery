@@ -120,13 +120,24 @@ class _Frames:
         return rest
 
 
+# Start/stop/restart go through their own proxy that allows only those three (with Docker Compose,
+# the "actions" profile); reads go through one that allows only reading. On a plain systemd
+# install both are Docker's socket.
+DOCKER_ACTIONS_HOST = os.environ.get("DOCKER_ACTIONS_HOST") or DOCKER_HOST
+
+
+def _client(host):
+    if host.startswith("tcp://"):
+        transport, base = httpx.AsyncHTTPTransport(), "http://" + host[6:].rstrip("/")
+    else:
+        transport, base = httpx.AsyncHTTPTransport(uds=host.removeprefix("unix://")), "http://docker"
+    return httpx.AsyncClient(transport=transport, base_url=base, timeout=httpx.Timeout(20, read=60))
+
+
 class Docker:
-    def __init__(self, host=DOCKER_HOST):
-        if host.startswith("tcp://"):
-            transport, base = httpx.AsyncHTTPTransport(), "http://" + host[6:].rstrip("/")
-        else:
-            transport, base = httpx.AsyncHTTPTransport(uds=host.removeprefix("unix://")), "http://docker"
-        self.client = httpx.AsyncClient(transport=transport, base_url=base, timeout=httpx.Timeout(20, read=60))
+    def __init__(self, host=DOCKER_HOST, actions_host=DOCKER_ACTIONS_HOST):
+        self.client = _client(host)
+        self.actions = self.client if actions_host == host else _client(actions_host)
 
     async def inspect(self, name):
         if not NAME.match(name or ""):
@@ -192,14 +203,17 @@ class Docker:
         if action == "stop" and "monitorr" in c["image"].lower():
             raise DockerError("That's Monitorr itself. Stopping it would take this page down; stop it on the server.")
         try:
-            r = await self.client.post(f"/containers/{c['id']}/{action}", params={"t": 10},
-                                       timeout=httpx.Timeout(40))
+            r = await self.actions.post(f"/containers/{c['id']}/{action}", params={"t": 10},
+                                        timeout=httpx.Timeout(40))
+        except httpx.ConnectError:
+            raise DockerError("The container-actions proxy isn't running. With Docker Compose, add "
+                              "COMPOSE_PROFILES=actions to .env and run docker compose up -d.", 503) from None
         except httpx.HTTPError as e:
             raise DockerError(f"Docker didn't answer ({type(e).__name__})", 504) from None
         if r.status_code == 304:
             return c["name"], "already " + ("running" if action == "start" else "stopped")
         if r.status_code == 403:
-            raise DockerError("The Docker proxy refused this action. Allow it there too (DOCKER_PROXY_ACTIONS=1).", 403)
+            raise DockerError("The Docker proxy refused this action.", 403)
         if r.status_code >= 400:
             raise DockerError((r.json().get("message") if r.headers.get("content-type", "").startswith(
                 "application/json") else None) or f"Docker answered {r.status_code}", 502)
@@ -207,3 +221,5 @@ class Docker:
 
     async def close(self):
         await self.client.aclose()
+        if self.actions is not self.client:
+            await self.actions.aclose()

@@ -10,7 +10,8 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# every package, dependencies included, must match the hash recorded in requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 COPY app.py hub.py agent.py common.py collectors.py alerts.py auth.py remote.py checks.py \
      dockerops.py security.py tlsutil.py netguard.py ./
 COPY static ./static

@@ -213,9 +213,9 @@ class Monitor:
         return [t for t in LEGACY_TABLES if t in names]
 
     def legacy_export(self):
-        out = {}
+        out, tables = {}, self.legacy_tables()  # before taking the lock: legacy_tables() takes it too
         with self.db_lock:
-            for t in self.legacy_tables():
+            for t in tables:
                 cur = self.db.execute(f"SELECT * FROM {t}" + (" WHERE ts > ?" if t == "check_results" else ""),
                                       (time.time() - 30 * 86400,) if t == "check_results" else ())
                 cols = [c[0] for c in cur.description]
@@ -223,8 +223,9 @@ class Monitor:
         return out
 
     def legacy_drop(self):
+        tables = self.legacy_tables()
         with self.db_lock:
-            for t in self.legacy_tables():
+            for t in tables:
                 self.db.execute(f"DROP TABLE {t}")  # agent tokens must not linger here
             self.db.commit()
             self.db.execute("VACUUM")

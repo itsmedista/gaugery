@@ -54,6 +54,7 @@ services:
       HOST_ROOT: /host
       DB_PATH: /data/metrics.db
       DOCKER_HOST: tcp://docker-proxy:2375
+      DOCKER_ACTIONS_HOST: tcp://docker-actions:2375
       ALLOW_LOGS: ${ALLOW_LOGS:-}
       ALLOW_CONTAINER_ACTIONS: ${ALLOW_CONTAINER_ACTIONS:-}
       SMART: ${SMART:-}
@@ -90,15 +91,34 @@ services:
     restart: unless-stopped
     environment:
       CONTAINERS: 1                                # list, inspect, stats and logs
-      POST: 0                                      # nothing that changes Docker...
+      POST: 0                                      # nothing that changes Docker
       EVENTS: 0                                    # not needed
-      ALLOW_START: ${DOCKER_PROXY_ACTIONS:-0}      # ...except these, if you allow container actions
-      ALLOW_STOP: ${DOCKER_PROXY_ACTIONS:-0}
-      ALLOW_RESTARTS: ${DOCKER_PROXY_ACTIONS:-0}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     read_only: true
-    tmpfs: [/run]
+    tmpfs: [/run, /tmp]              # the proxy writes its config at start
+    networks: [docker-api]
+
+  # Start/stop/restart only (create, exec and everything else stay refused). Runs only with
+  # COMPOSE_PROFILES=actions in .env, together with ALLOW_CONTAINER_ACTIONS on the agent.
+  docker-actions:
+    image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    container_name: monitorr-docker-actions
+    restart: unless-stopped
+    profiles: [actions]
+    environment:
+      POST: 1                  # POSTs pass the first gate, but the only ones that match an allow rule
+      CONTAINERS: 0            # are these three; with CONTAINERS=0, create and exec hit the final deny
+      ALLOW_START: 1
+      ALLOW_STOP: 1
+      ALLOW_RESTARTS: 1
+      EVENTS: 0
+      PING: 0
+      VERSION: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs: [/run, /tmp]
     networks: [docker-api]
 
 volumes:

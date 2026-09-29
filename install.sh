@@ -40,7 +40,7 @@ chmod -R go+rX "$DEST"   # readable by the monitorr user, writable by root only
 echo "Creating Python environment..."
 [[ -d "$DEST/venv" ]] || python3 -m venv "$DEST/venv"
 "$DEST/venv/bin/pip" install -q --upgrade pip
-"$DEST/venv/bin/pip" install -q -r "$DEST/requirements.txt"
+"$DEST/venv/bin/pip" install -q --require-hashes -r "$DEST/requirements.txt"   # exact, verified versions
 chmod -R go+rX "$DEST/venv"
 
 # ---------- settings ----------

@@ -36,9 +36,10 @@ def check_ip(ip, host, limit_to_allowed=True):
     if getattr(a, "ipv4_mapped", None):
         a = a.ipv4_mapped
     if any(a in n for n in BLOCKED):
-        raise Blocked(f"{host} is {a}, which Monitorr won't connect to (loopback, link-local or cloud metadata)")
+        where = str(a) if host == str(a) else f"{host} ({a})"
+        raise Blocked(f"Monitorr won't connect to {where}: loopback, link-local and cloud-metadata addresses are off limits")
     if limit_to_allowed and ALLOWED and not any(a in n for n in ALLOWED):
-        raise Blocked(f"{host} is {a}, outside CHECK_ALLOWED_NETWORKS")
+        raise Blocked(f"{host if host == str(a) else f'{host} ({a})'} is outside CHECK_ALLOWED_NETWORKS")
     return str(a)
 
 
