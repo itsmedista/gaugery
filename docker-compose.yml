@@ -16,7 +16,9 @@ services:
 
     volumes:
       - /:/host:ro,rslave                               # every host mount, read-only
-      - /var/run/docker.sock:/var/run/docker.sock:ro    # container stats
+      # Container stats, logs and actions. Note: ":ro" doesn't limit what Docker's API allows;
+      # anything that can reach this socket controls Docker. ALLOW_* below decide what the page exposes.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./data:/data                                    # history database
 
     environment:
@@ -25,6 +27,14 @@ services:
       AUTH_USER: ${AUTH_USER:-admin}
       AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
       SESSION_DAYS: 30
+      # Host names this answers to, comma separated (e.g. monitorr.lan,100.64.0.5). Blocks DNS rebinding.
+      ALLOWED_HOSTS: ""
+      # Agent mode (another Monitorr watches this server): AGENT_TOKEN=... in .env.
+      # Make one with: docker compose run --rm monitorr python app.py --new-token
+      AGENT_TOKEN: ${AGENT_TOKEN:-}
+      # Container logs on the dashboard, and start/stop/restart buttons (logged and sent to ntfy).
+      ALLOW_LOGS: "true"
+      ALLOW_CONTAINER_ACTIONS: "false"
       # Listen address. Put your Tailscale IP here (tailscale ip -4) to keep it on the tailnet.
       HOST: 0.0.0.0
       PORT: 8088

@@ -1,13 +1,13 @@
 FROM python:3.12-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends smartmontools \
+ && apt-get install -y --no-install-recommends smartmontools iputils-ping \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py collectors.py alerts.py auth.py ./
+COPY app.py collectors.py alerts.py auth.py remote.py checks.py dockerops.py security.py ./
 COPY static ./static
 
 ENV HOST_ROOT=/host \

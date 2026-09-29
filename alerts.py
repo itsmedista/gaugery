@@ -13,6 +13,8 @@ def _env(name, default):
         return float(default)
 
 
+DISC_FS = ("iso9660", "udf")  # CD/DVD images: read-only and always 100% used
+
 CFG = {
     "cpu_warn": _env("ALERT_CPU", 90),          # % for 5 minutes
     "mem_warn": _env("ALERT_MEM", 90),          # %
@@ -87,11 +89,11 @@ class AlertEngine:
                         "Reading this mount timed out. For network shares, check the server and connection.",
                         hold=10)
             self._check(now, f"ro:{m}", d["readonly"] and not d["network"]
-                        and d["fs"] not in ("iso9660", "udf"), "critical",
+                        and d["fs"] not in DISC_FS, "critical",
                         f"{m} is mounted read-only",
                         "The kernel may have remounted it after disk errors. Check dmesg.")
             pct = d.get("pct")
-            if pct is not None:
+            if pct is not None and d["fs"] not in DISC_FS:  # disc images are always 100% "full"
                 self._check(now, f"full:{m}", pct >= c["disk_warn"],
                             "critical" if pct >= c["disk_crit"] else "warning",
                             f"{m} is {pct:.0f}% full",
@@ -130,6 +132,18 @@ class AlertEngine:
             self._check(now, f"ctr-health:{n}", ct.get("health") == "unhealthy", "warning",
                         f"Container {n} is unhealthy", "Its health check is failing.", hold=30)
 
+        return self._finish(now)
+
+    def evaluate_items(self, items, now=None):
+        """Alerts computed elsewhere (service checks): each item is the arguments of one
+        _check() call after `now`. Anything not listed any more is resolved."""
+        now = now or time.time()
+        self._seen = set()
+        for item in items:
+            self._check(now, *item)
+        return self._finish(now)
+
+    def _finish(self, now):
         for aid in list(self.active):
             if aid not in self._seen:  # the thing it was about disappeared
                 self._event(now, "resolved", self.active.pop(aid))
@@ -141,6 +155,10 @@ class AlertEngine:
         active = sorted(self.active.values(), key=lambda a: (order[a["severity"]], -a["since"]))
         return {"active": active, "log": list(self.log)[-40:][::-1]}
 
+    def note(self, title, detail, now=None):
+        """Record something a person did (e.g. restarted a container) in the log and on ntfy."""
+        self._event(now or time.time(), "action", {"severity": "info", "title": title, "detail": detail})
+
     def _event(self, now, kind, a):
         ev = {"ts": now, "kind": kind, "severity": a["severity"], "title": a["title"], "detail": a["detail"]}
         self.log.append(ev)
@@ -150,15 +168,17 @@ class AlertEngine:
             threading.Thread(target=self._notify, args=(ev,), daemon=True).start()
 
     def _notify(self, ev):
-        resolved = ev["kind"] == "resolved"
+        resolved, action = ev["kind"] == "resolved", ev["kind"] == "action"
         headers = {
             "Title": f"[{self.host}] " + ("Resolved: " if resolved else "") + ev["title"],
-            "Priority": "default" if resolved else ("urgent" if ev["severity"] == "critical" else "high"),
-            "Tags": "white_check_mark" if resolved else ("rotating_light" if ev["severity"] == "critical" else "warning"),
+            "Priority": "default" if resolved or action else ("urgent" if ev["severity"] == "critical" else "high"),
+            "Tags": "white_check_mark" if resolved else "gear" if action else (
+                "rotating_light" if ev["severity"] == "critical" else "warning"),
         }
         if self.ntfy_token:
             headers["Authorization"] = f"Bearer {self.ntfy_token}"
-        headers = {k: v.encode("latin-1", "replace").decode("latin-1") for k, v in headers.items()}
+        # one line each (a mount name can contain a newline), and latin-1 as HTTP headers require
+        headers = {k: " ".join(v.split()).encode("latin-1", "replace").decode("latin-1") for k, v in headers.items()}
         try:
             req = urllib.request.Request(self.ntfy_url, data=ev["detail"].encode(), headers=headers)
             urllib.request.urlopen(req, timeout=10).read()

@@ -25,3 +25,23 @@ services:
       SAMPLE_INTERVAL: 2
       RETENTION_DAYS: 2
       NTFY_URL: ""   # never send phone alerts from the sandbox
+      ALLOW_CONTAINER_ACTIONS: "true"
+
+  # A pretend remote server, to test multi-server locally. In the hub, add it with
+  # address http://monitorr-agent:8088 and the token from DEV_AGENT_TOKEN in .env.
+  monitorr-agent:
+    image: monitorr:dev
+    container_name: monitorr-agent
+    pid: host
+    ports:
+      - "127.0.0.1:8090:8088"
+    volumes:
+      - /:/host:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data-dev/agent:/data
+    environment:
+      AGENT_TOKEN: ${DEV_AGENT_TOKEN:-}
+      ALLOW_CONTAINER_ACTIONS: "true"
+      SAMPLE_INTERVAL: 2
+      RETENTION_DAYS: 1
+      ALERT_DISK_WARN: 1  # a low threshold so the agent's card shows alerts (red) right away
