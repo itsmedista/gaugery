@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Sign in · Monitorr</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0D141C; --panel:#131C26; --panel2:#18232F; --raise:#1D2A38;
+  --line:#1F2C3A; --line2:#2A3A4C;
+  --text:#DCE4EC; --muted:#8395A9; --faint:#5A6B7E;
+  --teal:#35D0BA; --sky:#4FA8FF; --crit:#FF5A5F;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:radial-gradient(1200px 600px at 50% -10%,#15202B 0%,var(--bg) 60%);color:var(--text);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
+.card{width:100%;max-width:360px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:32px 28px 28px;box-shadow:0 24px 60px -20px rgba(0,0,0,.6)}
+.logo{display:flex;flex-direction:column;align-items:center;gap:14px;margin-bottom:26px}
+.logo h1{margin:0;font-size:22px;font-weight:600;letter-spacing:-.01em}
+.logo p{margin:-8px 0 0;color:var(--muted);font-size:13px}
+label{display:block;font-size:12.5px;color:var(--muted);margin:0 0 6px}
+input{width:100%;font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line2);border-radius:9px;padding:10px 12px;margin-bottom:16px}
+input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(53,208,186,.18)}
+button{width:100%;font:inherit;font-weight:600;color:#08201C;background:linear-gradient(90deg,var(--teal),var(--sky));border:0;border-radius:9px;padding:11px;cursor:pointer;margin-top:4px}
+button:disabled{opacity:.6;cursor:default}
+.err{min-height:20px;margin:12px 0 0;color:var(--crit);font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="logo">
+    <img src="icon.svg" width="56" height="56" alt="">
+    <h1>Monitorr</h1>
+    <p>Sign in to see your server</p>
+  </div>
+  <form id="f">
+    <label for="user">Username</label>
+    <input id="user" name="user" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <div id="code-row" hidden>
+      <label for="code">Code from your authenticator app</label>
+      <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7">
+    </div>
+    <button id="go">Sign in</button>
+    <p class="err" id="err" role="alert"></p>
+  </form>
+</main>
+<script>
+const f = document.getElementById('f'), err = document.getElementById('err'), go = document.getElementById('go');
+document.getElementById('user').focus();
+// already signed in (e.g. arriving from a link in another app)? go straight in
+fetch('api/info', {cache: 'no-store'}).then(r => { if (r.ok) location.replace('./'); }).catch(() => {});
+fetch('api/auth-config').then(r => r.json()).then(c => {
+  if (c.totp) { document.getElementById('code-row').hidden = false; document.getElementById('code').required = true; }
+}).catch(() => {});
+f.addEventListener('submit', async e => {
+  e.preventDefault();
+  go.disabled = true; err.textContent = '';
+  try {
+    const r = await fetch('api/login', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user: f.user.value.trim(), password: f.password.value, code: f.code.value})});
+    if (r.ok) { location.replace('./'); return; }
+    err.textContent = (await r.json().catch(() => ({}))).detail || 'Sign in failed';
+    f.password.select();
+  } catch {
+    err.textContent = "Can't reach Monitorr. Check that it's running.";
+  }
+  go.disabled = false;
+});
+</script>
+</body>
+</html>

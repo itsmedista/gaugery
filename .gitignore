@@ -2,3 +2,5 @@ data/
 metrics.db*
 __pycache__/
 *.pyc
+.env
+data-dev/

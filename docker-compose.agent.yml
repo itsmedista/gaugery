@@ -1,0 +1,85 @@
+# Monitorr agent for a server that another Monitorr (the hub) watches.
+#
+#   ./docker-setup.sh --agent                                     (writes .env with a token)
+#   docker compose -f docker-compose.agent.yml up -d --build
+#   docker compose -f docker-compose.agent.yml logs monitorr-agent   (shows the pairing code)
+#
+# Then on the hub: Add server -> https://<this server's address>:8088 and the pairing code.
+# The hub checks this agent's certificate against the code, so the connection can't be intercepted.
+
+services:
+  monitorr-agent:
+    build: .
+    image: monitorr:latest
+    container_name: monitorr-agent
+    restart: unless-stopped
+    environment:
+      ROLE: agent
+      AGENT_LISTEN: tcp                          # HTTPS with the agent's own certificate
+      AGENT_TOKEN: ${AGENT_TOKEN:?run ./docker-setup.sh --agent first}
+      HOST_ROOT: /host
+      DB_PATH: /data/metrics.db
+      DOCKER_HOST: tcp://docker-proxy:2375
+      DOCKER_ACTIONS_HOST: tcp://docker-actions:2375
+      ALLOW_LOGS: ${ALLOW_LOGS:-}
+      ALLOW_CONTAINER_ACTIONS: ${ALLOW_CONTAINER_ACTIONS:-}
+      SMART: ${SMART:-}
+      SAMPLE_INTERVAL: ${SAMPLE_INTERVAL:-2}
+      RETENTION_DAYS: ${RETENTION_DAYS:-14}
+      IGNORE_MOUNTS: ${IGNORE_MOUNTS:-}
+      NTFY_URL: ${NTFY_URL:-}
+      NTFY_TOKEN: ${NTFY_TOKEN:-}
+    ports:
+      - "${BIND:-0.0.0.0}:${PORT:-8088}:8088"   # put your Tailscale IP in BIND to keep it off the LAN
+    volumes:
+      - /:/host:ro,rslave
+      - ./data:/data
+    user: "0:0"
+    pid: host
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH]
+    security_opt: ["no-new-privileges:true"]
+    networks: [default, docker-api]
+    depends_on: [docker-proxy]
+
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    container_name: monitorr-docker-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      POST: 0
+      EVENTS: 0                                    # not needed
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs: [/run, /tmp]              # the proxy writes its config at start
+    networks: [docker-api]
+
+  # Start/stop/restart only (create, exec and everything else stay refused). Runs only with
+  # COMPOSE_PROFILES=actions in .env, together with ALLOW_CONTAINER_ACTIONS on the agent.
+  docker-actions:
+    image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    container_name: monitorr-docker-actions
+    restart: unless-stopped
+    profiles: [actions]
+    environment:
+      POST: 1                  # POSTs pass the first gate, but the only ones that match an allow rule
+      CONTAINERS: 0            # are these three; with CONTAINERS=0, create and exec hit the final deny
+      ALLOW_START: 1
+      ALLOW_STOP: 1
+      ALLOW_RESTARTS: 1
+      EVENTS: 0
+      PING: 0
+      VERSION: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs: [/run, /tmp]
+    networks: [docker-api]
+
+networks:
+  docker-api:
+    internal: true

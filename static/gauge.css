@@ -1,0 +1,13 @@
+/* The one gauge used across Monitorr: a 270-degree ring with the reading in the middle.
+   Colors come from each page's tokens (--teal, --sky, --warn, --crit, --panel...). */
+.gauge{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 8px;text-align:center;min-width:0}
+.gauge svg{display:block;width:100%;max-width:124px;margin:0 auto;height:auto}
+.gauge .trk{fill:none;stroke:var(--panel2);stroke-width:8;stroke-linecap:round}
+.gauge .val{fill:none;stroke:var(--teal);stroke-width:8;stroke-linecap:round;transition:stroke-dasharray .5s ease,stroke .3s}
+.gauge[data-lvl=warn] .val{stroke:var(--warn)}
+.gauge[data-lvl=crit] .val{stroke:var(--crit)}
+.gauge[data-lvl=rate] .val{stroke:var(--sky)}
+.gauge .gv{font:600 23px var(--sans);letter-spacing:-.01em;fill:var(--text);text-anchor:middle}
+.gauge .gu{font:400 10.5px var(--sans);fill:var(--muted);text-anchor:middle}
+.gauge .glabel{font-size:13px;font-weight:500;margin-top:-6px}
+.gauge .gsub{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}

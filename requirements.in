@@ -1,0 +1,7 @@
+# Direct dependencies. requirements.txt is the lock made from this (exact versions + hashes):
+#   uv pip compile --generate-hashes --python-version 3.12 --no-header requirements.in -o requirements.txt
+fastapi>=0.110
+uvicorn>=0.29
+psutil>=5.9
+httpx>=0.27
+cryptography>=42
