@@ -162,14 +162,17 @@ Pick one:
 - **Your reverse proxy:** point it at port 8088 and set `TRUSTED_PROXIES` to its address,
   so Monitorr sees the real client address and knows the connection is HTTPS.
 
-With HTTPS the session cookie is marked Secure and browsers are told to always use HTTPS.
+With HTTPS the session cookie is marked Secure. With a certificate browsers trust (Tailscale
+serve, your own, or your proxy's) they're also told to always use HTTPS (HSTS). Not with
+`TLS=auto`: HSTS would stop you from accepting its self-signed certificate.
 
 ## Security
 
 What Monitorr does for you:
 
 - **Least privilege:** the web interface has no host access, no Docker, no root and no
-  Linux capabilities, on a read-only filesystem. The agent has host access but no port on
+  Linux capabilities, on a read-only filesystem (systemd rates its sandbox 3.0 "OK"; the
+  agent's 4.6 "OK"). The agent has host access but no port on
   the main server, and Docker only through the socket proxy. A compromised web interface
   can read your dashboards and do what you allowed (logs, container actions); it can't
   become root.
