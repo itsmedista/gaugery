@@ -1,24 +1,25 @@
-"""Login for Monitorr: one user, a scrypt password hash, and a signed session cookie.
+"""Login for the Monitorr hub: one user, a scrypt password hash, optional two-factor codes (TOTP),
+and signed session cookies that can be revoked.
 
 Create the hash with:  python app.py --hash-password
-
-A server that another Monitorr watches runs as an agent: it sets AGENT_TOKEN, and the hub
-sends that token as a Bearer header. The token only unlocks the read-only data endpoints.
 """
 import base64
 import getpass
-import json
 import hashlib
 import hmac
+import json
 import os
 import secrets
+import struct
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 COOKIE = "monitorr_session"
 SESSION_DAYS = float(os.environ.get("SESSION_DAYS", "30"))
-MAX_FAILS, FAIL_WINDOW = 5, 300  # per client IP: 5 wrong passwords in 5 minutes locks it out
-MAX_TRACKED = 10000              # addresses remembered for that, so a flood can't eat memory
+REAUTH_AFTER = 15 * 60           # sensitive actions ask for the password again after this long
+FREE_TRIES, MAX_DELAY, FAIL_WINDOW = 3, 30, 900
+MAX_TRACKED = 10000              # addresses remembered for slowing down guesses, so a flood can't eat memory
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2 ** 14, 8, 1
 
 
@@ -52,8 +53,8 @@ def verify_password(password, stored):
 
 def prompt_hash():
     pw = getpass.getpass("New Monitorr password: ")
-    if len(pw) < 8:
-        raise SystemExit("Use at least 8 characters.")
+    if len(pw) < 10:
+        raise SystemExit("Use at least 10 characters.")
     if getpass.getpass("Repeat it: ") != pw:
         raise SystemExit("The passwords don't match.")
     print(hash_password(pw))
@@ -63,12 +64,46 @@ def new_token():
     print(secrets.token_urlsafe(32))
 
 
+def token_ok(header, token):
+    """A Bearer header carrying exactly this token."""
+    if not token or not header or not header.startswith("Bearer "):
+        return False
+    return hmac.compare_digest(header[7:].strip().encode(), token.encode())
+
+
+# ---------- two-factor codes (RFC 6238: 30-second, 6-digit, SHA-1, as every authenticator app does) ----------
+def totp_secret():
+    return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+
+
+def totp_uri(secret, user):
+    return f"otpauth://totp/Monitorr:{quote(user)}?secret={secret}&issuer=Monitorr"
+
+
+def _totp(secret, counter):
+    key = base64.b32decode(secret + "=" * (-len(secret) % 8))
+    h = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    o = h[-1] & 0x0F
+    return f"{(struct.unpack('>I', h[o:o + 4])[0] & 0x7FFFFFFF) % 1_000_000:06d}"
+
+
+def totp_match(secret, code, last_used=0):
+    """The time step the code belongs to (now, or one step either side for clock drift),
+    or None. A step at or before `last_used` is refused, so a code works only once."""
+    code = "".join(ch for ch in str(code or "") if ch.isdigit())
+    if len(code) != 6 or not secret:
+        return None
+    now = int(time.time() // 30)
+    for step in (now, now - 1, now + 1):
+        if step > last_used and hmac.compare_digest(_totp(secret, step), code):
+            return step
+    return None
+
+
 class Auth:
     def __init__(self, data_dir):
         self.user = os.environ.get("AUTH_USER", "admin")
         self.pw_hash = os.environ.get("AUTH_PASSWORD_HASH", "").strip()
-        self.enabled = os.environ.get("AUTH_DISABLED", "").lower() not in ("1", "true", "yes")
-        self.agent_token = os.environ.get("AGENT_TOKEN", "").strip()
         self._fails = {}
         # Sessions are signed with a key derived from the password hash, so changing the
         # password signs everyone out.
@@ -81,19 +116,13 @@ class Auth:
             self._revoked = {}
 
     def check_config(self):
-        if self.agent_token and len(self.agent_token) < 24:
-            raise SystemExit("AGENT_TOKEN is too short. Make one with `python app.py --new-token`.")
-        if self.enabled and not self.pw_hash and not self.agent_token:
+        if os.environ.get("AUTH_DISABLED"):
+            raise SystemExit("AUTH_DISABLED was removed: Monitorr always asks for a password. Remove the setting.")
+        if not self.pw_hash:
             raise SystemExit(
                 "Monitorr needs a password. Run `python app.py --hash-password` (or "
                 "`docker compose run --rm monitorr python app.py --hash-password`) and set "
-                "AUTH_PASSWORD_HASH to the result. For an agent that only a hub reads, set "
-                "AGENT_TOKEN instead. To run without login, set AUTH_DISABLED=true.")
-
-    def agent_ok(self, header):
-        if not self.agent_token or not header or not header.startswith("Bearer "):
-            return False
-        return hmac.compare_digest(header[7:].strip().encode(), self.agent_token.encode())
+                "AUTH_PASSWORD_HASH to the result.")
 
     @staticmethod
     def _secret(data_dir):
@@ -112,40 +141,42 @@ class Auth:
             return key
 
     # ---------- sessions ----------
-    def issue(self):
-        exp = int(time.time() + SESSION_DAYS * 86400)
-        payload = _b64(f"{self.user}|{exp}|{secrets.token_urlsafe(12)}".encode())
+    def issue(self, exp=None):
+        """A session cookie value; its auth time (now) is when the password was last entered."""
+        exp = int(exp or time.time() + SESSION_DAYS * 86400)
+        payload = _b64(f"{self.user}|{exp}|{secrets.token_urlsafe(12)}|{int(time.time())}".encode())
         return f"{payload}.{self._sign(payload)}"
 
-    def _session(self, token):
-        """(session id, expiry) of a genuine, unexpired session token, else None."""
+    def session(self, token):
+        """{"id", "exp", "auth_time"} of a genuine, unexpired, not revoked session, else None."""
         if not token or "." not in token or len(token) > 512:
             return None
         payload, sig = token.rsplit(".", 1)
         if not hmac.compare_digest(sig.encode(), self._sign(payload).encode()):
             return None
         try:
-            user, exp, sid = _unb64(payload).decode().split("|")
-            exp = int(exp)
+            user, exp, sid, auth_time = _unb64(payload).decode().split("|")
+            exp, auth_time = int(exp), int(auth_time)
         except ValueError:
             return None
-        return (sid, exp) if user == self.user and exp > time.time() else None
+        if user != self.user or exp <= time.time() or sid in self._revoked:
+            return None
+        return {"id": sid, "exp": exp, "auth_time": auth_time}
 
     def valid(self, token):
-        if not self.enabled:
-            return True
-        if not self.pw_hash:  # agent-only: nobody signs in here
-            return False
-        s = self._session(token)
-        return s is not None and s[0] not in self._revoked
+        return self.session(token) is not None
+
+    def recent(self, token):
+        s = self.session(token)
+        return s is not None and time.time() - s["auth_time"] < REAUTH_AFTER
 
     def revoke(self, token):
-        s = self._session(token)
+        s = self.session(token)
         if not s:
             return
         now = time.time()
         self._revoked = {k: v for k, v in self._revoked.items() if v > now}
-        self._revoked[s[0]] = s[1]
+        self._revoked[s["id"]] = s["exp"]
         try:
             self._revoked_path.write_text(json.dumps(self._revoked))
         except OSError:
@@ -154,24 +185,29 @@ class Auth:
     def _sign(self, payload):
         return _b64(hmac.new(self._key, payload.encode(), hashlib.sha256).digest())
 
-    # ---------- login ----------
-    def locked(self, ip):
+    # ---------- guessing ----------
+    def wait(self, ip):
+        """Seconds this address must wait before its next try. Delays grow with each wrong
+        password (1, 2, 4 ... 30 s) instead of locking anyone out, so an attacker can slow
+        the owner down by at most half a minute."""
         now = time.time()
         if len(self._fails) > MAX_TRACKED:
-            self._fails = {k: v for k, v in self._fails.items() if v and now - v[-1] < FAIL_WINDOW}
-        fails = [t for t in self._fails.get(ip, []) if now - t < FAIL_WINDOW]
-        if fails:
-            self._fails[ip] = fails
-        else:
+            self._fails = {k: v for k, v in self._fails.items() if now - v[1] < FAIL_WINDOW}
+        n, last = self._fails.get(ip, (0, 0.0))
+        if now - last > FAIL_WINDOW:
             self._fails.pop(ip, None)
-        return len(fails) >= MAX_FAILS
+            return 0
+        delay = 0 if n < FREE_TRIES else min(MAX_DELAY, 2 ** (n - FREE_TRIES))
+        return max(0, int(last + delay - now + 0.999))
 
-    def login(self, ip, user, password):
-        if not self.pw_hash:
-            return False
-        ok = hmac.compare_digest(user.encode(), self.user.encode()) & verify_password(password, self.pw_hash)
-        if ok:
-            self._fails.pop(ip, None)
-        else:
-            self._fails.setdefault(ip, []).append(time.time())
-        return ok
+    def failed(self, ip):
+        n, _ = self._fails.get(ip, (0, 0.0))
+        self._fails[ip] = (n + 1, time.time())
+        return n + 1
+
+    def succeeded(self, ip):
+        self._fails.pop(ip, None)
+
+    def password_ok(self, user, password):
+        # both compared every time, so neither the user name nor timing gives anything away
+        return hmac.compare_digest(user.encode(), self.user.encode()) & verify_password(password, self.pw_hash)

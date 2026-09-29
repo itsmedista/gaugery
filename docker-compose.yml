@@ -1,54 +1,110 @@
+# Monitorr on this server, as three containers:
+#   monitorr        the web interface. The only one with a port; no host access, no Docker, not root.
+#   monitorr-agent  collects this server's data. No port: only the web interface can talk to it.
+#   docker-proxy    lets the agent list containers and read logs, and nothing that could take over the host.
+#
+# First time: ./docker-setup.sh   (writes .env with your password hash and the agent token)
+# Update:     docker compose up -d --build
+# Settings:   .env (see .env.example)
+
 services:
   monitorr:
     build: .
     image: monitorr:latest
     container_name: monitorr
     restart: unless-stopped
-
-    # The monitor must see the host, not its own container:
-    network_mode: host     # real network interfaces (and the page is served on the host's IP)
-    pid: host              # host processes and the host's mount table
-    privileged: true       # SMART access to your drives
-    # Prefer not to use privileged? Remove it and list your disks instead
-    # (you'll also lose SMART on some NVMe drives):
-    # cap_add: [SYS_RAWIO, SYS_ADMIN]
-    # devices: ["/dev/sda", "/dev/sdb", "/dev/sdc"]
-
-    volumes:
-      - /:/host:ro,rslave                               # every host mount, read-only
-      # Container stats, logs and actions. Note: ":ro" doesn't limit what Docker's API allows;
-      # anything that can reach this socket controls Docker. ALLOW_* below decide what the page exposes.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./data:/data                                    # history database
-
     environment:
-      # Login. Put AUTH_PASSWORD_HASH=... in a .env file next to this one (it's gitignored).
-      # Make the hash with: docker compose run --rm monitorr python app.py --hash-password
+      ROLE: hub
+      HUB_DB: /data/hub.db
+      LOCAL_AGENT: unix:/run/monitorr/agent.sock
+      AGENT_TOKEN: ${AGENT_TOKEN:?run ./docker-setup.sh first}
       AUTH_USER: ${AUTH_USER:-admin}
-      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
-      SESSION_DAYS: 30
-      # Host names this answers to, comma separated (e.g. monitorr.lan,100.64.0.5). Blocks DNS rebinding.
-      ALLOWED_HOSTS: ""
-      # Agent mode (another Monitorr watches this server): AGENT_TOKEN=... in .env.
-      # Make one with: docker compose run --rm monitorr python app.py --new-token
-      AGENT_TOKEN: ${AGENT_TOKEN:-}
-      # Container logs on the dashboard, and start/stop/restart buttons (logged and sent to ntfy).
-      ALLOW_LOGS: "true"
-      ALLOW_CONTAINER_ACTIONS: "false"
-      # Listen address. Put your Tailscale IP here (tailscale ip -4) to keep it on the tailnet.
-      HOST: 0.0.0.0
-      PORT: 8088
-      SAMPLE_INTERVAL: 2
-      RETENTION_DAYS: 14
-      # Phone alerts via ntfy, e.g. https://ntfy.sh/your-private-topic (empty = off)
-      NTFY_URL: ""
-      NTFY_TOKEN: ""
-      # Mount points to hide, comma separated
-      IGNORE_MOUNTS: ""
-      ALERT_CPU: 90
-      ALERT_MEM: 90
-      ALERT_DISK_WARN: 85
-      ALERT_DISK_CRIT: 95
-      ALERT_TEMP_WARN: 80
-      ALERT_TEMP_CRIT: 90
-      ALERT_FILL_DAYS: 14
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:?run ./docker-setup.sh first}
+      SESSION_DAYS: ${SESSION_DAYS:-30}
+      TLS: ${TLS:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      ALLOW_HTTP_LOGIN: ${ALLOW_HTTP_LOGIN:-}
+      CHECK_ALLOWED_NETWORKS: ${CHECK_ALLOWED_NETWORKS:-}
+      NTFY_URL: ${NTFY_URL:-}
+      NTFY_TOKEN: ${NTFY_TOKEN:-}
+    ports:
+      - "${BIND:-0.0.0.0}:${PORT:-8088}:8088"
+    volumes:
+      - hub-data:/data
+      - agent-socket:/run/monitorr
+    user: "10001:10001"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    sysctls:
+      net.ipv4.ping_group_range: "0 2147483647"   # ping for service checks without raw-socket rights
+    depends_on: [monitorr-agent]
+
+  monitorr-agent:
+    image: monitorr:latest
+    container_name: monitorr-agent
+    restart: unless-stopped
+    environment:
+      ROLE: agent
+      AGENT_LISTEN: unix:/run/monitorr/agent.sock
+      AGENT_SOCKET_GROUP: 10001                    # the web interface's group may open the socket
+      AGENT_TOKEN: ${AGENT_TOKEN}
+      HOST_ROOT: /host
+      DB_PATH: /data/metrics.db
+      DOCKER_HOST: tcp://docker-proxy:2375
+      ALLOW_LOGS: ${ALLOW_LOGS:-}
+      ALLOW_CONTAINER_ACTIONS: ${ALLOW_CONTAINER_ACTIONS:-}
+      SMART: ${SMART:-}
+      SAMPLE_INTERVAL: ${SAMPLE_INTERVAL:-2}
+      RETENTION_DAYS: ${RETENTION_DAYS:-14}
+      IGNORE_MOUNTS: ${IGNORE_MOUNTS:-}
+      NTFY_URL: ${NTFY_URL:-}
+      NTFY_TOKEN: ${NTFY_TOKEN:-}
+      ALERT_CPU: ${ALERT_CPU:-90}
+      ALERT_MEM: ${ALERT_MEM:-90}
+      ALERT_DISK_WARN: ${ALERT_DISK_WARN:-85}
+      ALERT_DISK_CRIT: ${ALERT_DISK_CRIT:-95}
+      ALERT_TEMP_WARN: ${ALERT_TEMP_WARN:-80}
+      ALERT_TEMP_CRIT: ${ALERT_TEMP_CRIT:-90}
+      ALERT_FILL_DAYS: ${ALERT_FILL_DAYS:-14}
+    volumes:
+      - /:/host:ro,rslave          # every host mount, read-only
+      - ./data:/data               # history (and, before the hub/agent split, the hub's data)
+      - agent-socket:/run/monitorr
+    user: "0:0"                    # root inside, for reading every mount and process...
+    pid: host                      # ...of the host (its processes and network counters)
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]                # ...but without root's powers beyond these two:
+    cap_add: [CHOWN, DAC_READ_SEARCH]
+    security_opt: ["no-new-privileges:true"]
+    networks: [default, docker-api]
+    depends_on: [docker-proxy]
+    # Drive health (SMART) needs raw disk access: see docker-compose.smart.yml
+
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    container_name: monitorr-docker-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1                                # list, inspect, stats and logs
+      POST: 0                                      # nothing that changes Docker...
+      EVENTS: 0                                    # not needed
+      ALLOW_START: ${DOCKER_PROXY_ACTIONS:-0}      # ...except these, if you allow container actions
+      ALLOW_STOP: ${DOCKER_PROXY_ACTIONS:-0}
+      ALLOW_RESTARTS: ${DOCKER_PROXY_ACTIONS:-0}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs: [/run]
+    networks: [docker-api]
+
+volumes:
+  hub-data:
+  agent-socket:
+
+networks:
+  docker-api:
+    internal: true                 # only the agent reaches the proxy, and the proxy reaches nothing else

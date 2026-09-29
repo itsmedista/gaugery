@@ -8,10 +8,11 @@ import re
 import secrets
 import ssl
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 
+import netguard
 from alerts import AlertEngine
 
 KINDS = ("http", "tcp", "ping")
@@ -85,6 +86,21 @@ def validate(body):
             "verify_tls": 1 if body.get("verify_tls", True) else 0, "cert_days": cert_days}
 
 
+async def guard_target(kind, target):
+    """CheckError if the check would point somewhere Monitorr must not connect to."""
+    try:
+        if kind == "http":
+            u = urlsplit(target)
+            await netguard.resolve(u.hostname or "", u.port or 0)
+        elif kind == "tcp":
+            host, port = _host_port(target)
+            await netguard.resolve(host, port)
+        else:
+            await netguard.resolve(target)
+    except netguard.Blocked as e:
+        raise CheckError(str(e)) from None
+
+
 class Checks:
     def __init__(self, db, db_lock, server_name):
         self.db, self.db_lock, self.server_name = db, db_lock, server_name
@@ -100,7 +116,8 @@ class Checks:
         self.state = {cid: self._blank() for cid in self.checks}
         self.next_run = dict.fromkeys(self.checks, 0.0)
         self.engines, self.alerts = {}, {}   # per server: an AlertEngine and its active service alerts
-        self._http = {v: httpx.AsyncClient(verify=v, follow_redirects=True,
+        # redirects are followed by hand, so each hop's destination is checked too
+        self._http = {v: httpx.AsyncClient(verify=v, follow_redirects=False,
                                            headers={"User-Agent": "Monitorr service check"}) for v in (True, False)}
         self._pruned = 0.0
 
@@ -146,6 +163,20 @@ class Checks:
             self.db.commit()
         self._evaluate(c["server"])  # resolves its alerts
         return True
+
+    def import_rows(self, rows, results):
+        """Checks and their recent results from the previous version's database."""
+        with self.db_lock:
+            for r in rows:
+                if r.get("id") in self.checks:
+                    continue
+                self.db.execute(f"INSERT OR IGNORE INTO checks VALUES ({', '.join('?' * len(FIELDS))})",
+                                [r.get(f) for f in FIELDS])
+                self.checks[r["id"]] = {f: r.get(f) for f in FIELDS}
+                self.state[r["id"]], self.next_run[r["id"]] = self._blank(), 0.0
+            self.db.executemany("INSERT INTO check_results VALUES (?, ?, ?, ?, ?)",
+                                [(x["cid"], x["ts"], x["ok"], x["ms"], x["detail"]) for x in results])
+            self.db.commit()
 
     def delete_server(self, server):
         for cid in [cid for cid, c in self.checks.items() if c["server"] == server]:
@@ -231,10 +262,27 @@ class Checks:
 
     async def _probe(self, c):
         """-> (ok, detail, ms or None to use wall time)"""
+        try:
+            return await self._probe_guarded(c)
+        except netguard.Blocked as e:
+            return False, str(e), None
+
+    async def _probe_guarded(self, c):
         t = c["timeout"]
         if c["kind"] == "http":
+            url = c["target"]
             try:
-                r = await self._http[bool(c["verify_tls"])].get(c["target"], timeout=t)
+                for _ in range(6):
+                    u = urlsplit(url)
+                    await netguard.resolve(u.hostname or "", u.port or (443 if u.scheme == "https" else 80))
+                    r = await self._http[bool(c["verify_tls"])].get(url, timeout=t)
+                    if not (r.is_redirect and r.headers.get("location")):
+                        break
+                    url = urljoin(str(r.url), r.headers["location"])
+                    if urlsplit(url).scheme not in ("http", "https"):
+                        return False, "Redirected to something that isn't a web address", None
+                else:
+                    return False, "Too many redirects", None
             except httpx.TimeoutException:
                 return False, f"No answer within {t:g}s", None
             except httpx.HTTPError as e:
@@ -249,8 +297,9 @@ class Checks:
             return True, f"HTTP {r.status_code}", None
         if c["kind"] == "tcp":
             host, port = _host_port(c["target"])
+            ip = (await netguard.resolve(host, port))[0]  # connect to the address that was checked
             try:
-                _, w = await asyncio.wait_for(asyncio.open_connection(host, port), t)
+                _, w = await asyncio.wait_for(asyncio.open_connection(ip, port), t)
             except asyncio.TimeoutError:
                 return False, f"No answer within {t:g}s", None
             except ConnectionRefusedError:
@@ -259,9 +308,10 @@ class Checks:
                 return False, f"Can't connect: {e.strerror or e}", None
             w.close()
             return True, f"Port {port} is open", None
-        # ping
+        # ping: resolved and checked here, so ping itself only ever sees an IP address
+        ip = (await netguard.resolve(c["target"]))[0]
         try:
-            p = await asyncio.create_subprocess_exec("ping", "-c", "1", "-W", str(max(1, round(t))), c["target"],
+            p = await asyncio.create_subprocess_exec("ping", "-c", "1", "-W", str(max(1, round(t))), ip,
                                                      stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
         except FileNotFoundError:
             return False, "ping isn't installed where Monitorr runs", None
@@ -276,8 +326,9 @@ class Checks:
     async def _cert_expiry(url):
         u = urlsplit(url)
         try:
+            ip = (await netguard.resolve(u.hostname, u.port or 443))[0]
             _, w = await asyncio.wait_for(asyncio.open_connection(
-                u.hostname, u.port or 443, ssl=ssl.create_default_context(), server_hostname=u.hostname), 10)
+                ip, u.port or 443, ssl=ssl.create_default_context(), server_hostname=u.hostname), 10)
             cert = w.get_extra_info("peercert")
             w.close()
             return ssl.cert_time_to_seconds(cert["notAfter"])

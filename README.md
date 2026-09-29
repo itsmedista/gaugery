@@ -1,78 +1,84 @@
 # Monitorr
 
-A monitoring dashboard for one Linux server. It samples every 2 seconds,
-keeps per-minute history in SQLite, and serves a live web page behind a login.
+A monitoring dashboard for your Linux servers. It samples every 2 seconds, keeps
+per-minute history in SQLite, checks that your services answer, and serves a live
+web page behind a login.
+
+## How it's put together
+
+Monitorr is two parts, so the part you open in a browser never has power over your server:
+
+- **The web interface** (`monitorr`): pages, sign-in, service checks, your list of servers.
+  It runs as an unprivileged user with no access to the host or to Docker.
+- **The agent** (`monitorr-agent`): collects one server's data. It's the only part with
+  host access, it has no web page, and it answers only the web interface, which proves
+  itself with a secret token. On the same machine they talk over a Unix socket (no port).
+  On other servers the agent listens on HTTPS with its own certificate, which the web
+  interface pins when you pair it.
+- With Docker, the agent reaches Docker through a **socket proxy** that allows listing
+  containers, their stats and logs (and start/stop/restart only if you turn that on).
+  Nothing that could create containers or take over the host gets through.
 
 ## Install with Docker (recommended)
 
     git clone https://github.com/itsmedista/server-monitor.git monitorr && cd monitorr
-    docker compose build
-    docker compose run --rm monitorr python app.py --hash-password   # prints scrypt:...
-    nano .env      # add one line:  AUTH_PASSWORD_HASH=scrypt:...
+    ./docker-setup.sh          # asks for your password, writes .env
     docker compose up -d
 
-Open `http://<server-ip>:8088` and sign in as `admin` with the password you chose.
-Settings are the `environment:` block in `docker-compose.yml`; apply changes with
-`docker compose up -d`. History is kept in `./data`.
+Open `http://<server-ip>:8088` and sign in as `admin`. Settings are in `.env` (every
+option is explained in `.env.example`); apply changes with `docker compose up -d`.
 
-To keep it private to your tailnet, set `HOST` to the output of `tailscale ip -4`.
+- Update after pulling changes: `docker compose up -d --build`
+- Logs: `docker logs -f monitorr` (web interface), `docker logs -f monitorr-agent`
+- History is kept in `./data`; the web interface's own data (servers, checks, layout)
+  in the `hub-data` volume.
+- Drive health (SMART) needs raw disk access, so it's opt-in: list your disks in
+  `docker-compose.smart.yml` and start with
+  `docker compose -f docker-compose.yml -f docker-compose.smart.yml up -d`.
 
-Why the container needs host access: it uses host networking (real interface
-traffic), the host PID namespace (processes and mount table), a read-only view of
-`/` at `/host` (drive space for every mount), the Docker socket (container stats),
-and privileged mode (SMART). See the comments in `docker-compose.yml` for a
-less-privileged option.
-
-Update after changing files: `docker compose up -d --build`
-Logs: `docker logs -f monitorr`
-
-Upgrading from `server-monitor`: create the `.env` file above, then run
-`docker compose up -d --build --remove-orphans`. The old container is removed and
-the history in `./data` carries over.
+**Upgrading from the single-container version:** run `./docker-setup.sh` (it adds the
+agent token to your `.env`), then `docker compose up -d --build --remove-orphans`. On first
+start the web interface takes over your servers, service checks and layout from the old
+database automatically. Servers added before encrypted connections show "added before
+connections were encrypted": remove them and add them again with their pairing code.
 
 ## Install without Docker (systemd)
 
     sudo ./install.sh
 
-It asks for a login password on first install. Settings live in `/etc/monitorr.env`.
-An existing `server-monitor` install is migrated, settings and history included.
+It asks for a password, then runs two services: `monitorr` (web interface, as the
+unprivileged `monitorr` user, heavily sandboxed) and `monitorr-agent` (root, reached only
+over `/run/monitorr/agent.sock`). Settings live in `/etc/monitorr.env`, readable by root
+only; after changes: `sudo systemctl restart monitorr-agent monitorr`.
 
 ## Monitoring more servers
 
-Monitorr opens on an overview with one card per server: green when it has no
-active alerts, red when it has alerts or can't be reached. Click a card for
-that server's full dashboard.
+On each extra server, install just the agent:
 
-Arrange the overview your way. Every card stays the same size, so rows always line up:
+    sudo ./install.sh --agent                              # systemd
+    ./docker-setup.sh --agent && docker compose -f docker-compose.agent.yml up -d   # Docker
+
+It prints an address and a **pairing code**. On your main Monitorr click **Add server**,
+give it a name, and paste both. The pairing code carries the agent's token and its
+certificate's fingerprint: the web interface refuses to connect if the certificate at that
+address isn't the one in the code, so nobody in between can read or impersonate the agent.
+(Lost the code? `docker compose -f docker-compose.agent.yml logs monitorr-agent`, or
+`sudo /opt/monitorr/venv/bin/python /opt/monitorr/app.py --pairing-code` with the
+settings loaded.)
+
+The web interface must reach the agent's port; Tailscale is the easy way (set the
+agent's `BIND`/`HOST` to its `tailscale ip -4`). Each agent sends its own phone alerts, so
+set `NTFY_URL` on each one if you want them.
+
+The overview shows one card per server: green with no active alerts, red with alerts or
+when it can't be reached. Every card is the same size, so rows always line up:
 
 - **Move** a card by dragging its grip (the dots left of the name), or focus the grip
   and use the arrow keys. The card's `⋯` menu also has "Move earlier" and "Move later".
 - **Pin** important servers from the `⋯` menu; pinned cards always come first.
 - **Detailed / Compact** in the header switches every card's size at once.
 
-The layout is saved on the hub, so every device shows the same order.
-
-Each extra server runs Monitorr as an **agent**: the same app, but with no login
-page; it only answers your main Monitorr (the hub), which sends a secret token.
-Your browser only ever talks to the hub.
-
-On the remote server:
-
-    sudo ./install.sh --agent          # prints the address and token to paste
-
-or with Docker, put a token in `.env` and start it as usual:
-
-    docker compose build
-    echo "AGENT_TOKEN=$(docker compose run --rm -T monitorr python app.py --new-token)" > .env
-    docker compose up -d
-
-Then click **Add server** on the hub and enter a name, the address
-(`http://<ip>:8088`) and the token. The hub checks the connection before saving.
-
-- The hub must reach the agent's port. Tailscale is the easy way: set the agent's
-  `HOST` to its `tailscale ip -4` so it isn't exposed anywhere else.
-- The token only unlocks read-only data (info, history, live stream, summary).
-- Each agent sends its own phone alerts, so set `NTFY_URL` on each one if you want them.
+The layout is saved on the web interface, so every device shows the same order.
 
 ## Service checks
 
@@ -85,78 +91,95 @@ A running machine isn't the same as a working service. On any server's page,
 - **Port (TCP)**: `host:port` accepts connections (SSH, databases, game servers).
 - **Ping**: the host replies.
 
-Your main Monitorr (the hub) runs every check, every 30 s to 15 min, and files it
-under the server you added it on. Two failures in a row raise a critical alert and
-send a phone alert through ntfy like any other. The service also shows on the server's
-card, which turns red. Each check keeps 30 days of results for its response-time
-sparkline and 24-hour and 7-day uptime.
+The web interface runs every check, every 30 s to 15 min, and files it under the server
+you added it on. Two failures in a row raise a critical alert and a phone alert through
+ntfy. Each check keeps 30 days of results for its response-time sparkline and 24-hour and
+7-day uptime.
 
-Because the hub runs the checks, they test what the hub can reach. Agents need
-nothing extra.
+Checks can't reach loopback, link-local or cloud-metadata addresses (so they can't be
+turned against the machine itself or a cloud provider's credentials), including through
+redirects. `CHECK_ALLOWED_NETWORKS` (e.g. `192.168.1.0/24,100.64.0.0/10`) limits them
+further to your own networks.
 
 ## Container logs and actions
 
-Each server's page has a **Logs** section for any container: search, a live tail,
-and a time window that follows the range buttons (Live, 1h, 6h, 24h, 7d).
-**Click any chart** to jump to the logs from that moment, with the closest line
-highlighted. The logs button on a container row opens that container's logs.
+Both are off until you allow them, per server and per container:
 
-With `ALLOW_CONTAINER_ACTIONS=true`, container rows also get start, stop and
-restart buttons. They're off by default, and each server decides for itself (on an
-agent, set it in the agent's settings). Guardrails:
+    ALLOW_LOGS=all                 # or: plex,nginx
+    ALLOW_CONTAINER_ACTIONS=plex   # start/stop/restart buttons; with Docker also DOCKER_PROXY_ACTIONS=1
 
-- Every action is recorded in that server's alert history and sent to ntfy.
-- Actions only accept JSON, so another website can't trigger them through your
-  signed-in browser.
-- Monitorr won't stop its own container (that would take the page down).
+Each server's page then has a **Logs** section: search, a live tail, and a time window
+that follows the range buttons. **Click any chart** to jump to the logs from that moment.
+Log lines are scrubbed of obvious secrets (passwords in URLs, `password=`/`token=` values,
+bearer tokens, JWTs, AWS keys) before they leave the server; it's best-effort, which is
+why logs are opt-in per container (`LOG_REDACT=false` turns the scrubbing off).
 
-`ALLOW_LOGS=false` hides logs on a server; logs often contain secrets.
+Every container action asks for your password if you last entered it more than 15
+minutes ago, is recorded on both sides, and goes to ntfy. Monitorr won't stop its own
+container.
 
-A word on `docker.sock`: mounting it `:ro` does **not** make Docker read-only.
-Anything that can reach the socket can control Docker. These switches decide what
-Monitorr's page exposes; the socket itself always allowed more.
-
-## Login
+## Signing in
 
 - One user: `AUTH_USER` (default `admin`) and `AUTH_PASSWORD_HASH`, a scrypt hash
   made by `python app.py --hash-password`. The plain password is never stored.
-- Sessions last `SESSION_DAYS` (default 30). Changing the password signs everyone out.
-- Five wrong passwords from one address lock it out for five minutes.
-- `AUTH_DISABLED=true` turns the login off, e.g. if a reverse proxy already handles it.
-- Over plain HTTP the password crosses the network unencrypted. Use it over
-  Tailscale (encrypted) or put HTTPS in front of it.
+- **Two-factor sign-in:** Security (shield icon) → Turn on, then scan or type the key
+  into any authenticator app. Lost your phone? On the server:
+  `docker compose exec monitorr python app.py --disable-2fa` (Docker) or
+  `sudo -u monitorr ... app.py --disable-2fa` with the settings loaded (systemd).
+- Sensitive changes (servers, service checks, container actions, two-factor) ask for your
+  password again after 15 minutes, so a stolen session can look but not change anything.
+- Sessions last `SESSION_DAYS` (default 30) and are revoked at sign-out. Changing the
+  password signs everyone out.
+- Wrong passwords make that address wait longer each time (up to 30 s). There's no
+  lockout, so an attacker can't lock you out.
+- Signing in over plain HTTP is refused from public addresses; this machine, private
+  networks and Tailscale are fine.
+
+## HTTPS
+
+Pick one:
+
+- **Tailscale serve** (easiest; a real certificate, nothing to manage): set `BIND=127.0.0.1`
+  (Docker) or `HOST=127.0.0.1` (systemd) and `TRUSTED_PROXIES=127.0.0.1` (Docker on Linux:
+  the bridge gateway, usually `172.17.0.1`), then `tailscale serve --bg 8088`. Open
+  `https://<machine>.<tailnet>.ts.net`.
+- **Built in:** `TLS=auto` serves HTTPS with Monitorr's own certificate (your browser asks
+  once whether to trust it), or `TLS_CERT`/`TLS_KEY` for your own.
+- **Your reverse proxy:** point it at port 8088 and set `TRUSTED_PROXIES` to its address,
+  so Monitorr sees the real client address and knows the connection is HTTPS.
+
+With HTTPS the session cookie is marked Secure and browsers are told to always use HTTPS.
 
 ## Security
 
 What Monitorr does for you:
 
-- **Login:** scrypt password hash; sessions are signed, expire, and are revoked at
-  sign-out, so a copied cookie stops working. Five wrong passwords lock that address out
-  for five minutes, and password checks run off the main loop, so a login flood can't
-  freeze the app.
+- **Least privilege:** the web interface has no host access, no Docker, no root and no
+  Linux capabilities, on a read-only filesystem. The agent has host access but no port on
+  the main server, and Docker only through the socket proxy. A compromised web interface
+  can read your dashboards and do what you allowed (logs, container actions); it can't
+  become root.
+- **Encrypted, authenticated agents:** pinned TLS between the web interface and remote
+  agents; tokens never cross the network in the clear.
+- **Sign-in:** see above. Security events (sign-ins from new addresses, repeated wrong
+  passwords, servers/checks/two-factor changed, container actions) are listed under
+  Security and sent to ntfy.
 - **Browser protections:** a strict Content-Security-Policy (only Monitorr's own scripts
-  run), no framing (no clickjacking), `nosniff`, and no referrer. Requests that change
-  something must come from Monitorr's own pages as JSON. That blocks other sites, and
-  other apps on the same host, from acting with your session.
-- **Remote servers are untrusted:** the hub checks and trims what agents send, never serves
-  an agent's reply as a page, and the pages escape everything. A hacked agent can lie
-  about its own numbers, but it can't take over the hub.
-- **Files:** the database (which holds agent tokens) and keys are readable by Monitorr's
-  user only.
+  run), no framing, `nosniff`, no referrer, `SameSite=Strict` cookies, and changes only
+  from Monitorr's own pages as JSON.
+- **Remote servers are untrusted:** the web interface checks and trims what agents send,
+  never serves an agent's reply as a page, and the pages escape everything.
+- **Supply chain:** the base images (Python, socket proxy) are pinned by digest, so a build
+  never picks up a changed image. Python packages have minimum versions in `requirements.txt`;
+  locking them to exact versions with hashes is still to do.
 
 What stays your job:
 
-- **Keep it off the internet.** Serve it over Tailscale, or behind HTTPS. Over plain HTTP
-  on a LAN, passwords and agent tokens travel unencrypted. Set `HOST` to a Tailscale
-  IP to listen only there.
-- **Set `ALLOWED_HOSTS`** to the names and IPs you use to open it. This blocks DNS rebinding,
-  and it's essential if you ever set `AUTH_DISABLED=true`.
-- **Treat the Docker socket as root.** Whatever can use `docker.sock` controls the host,
-  with or without `:ro`, and so does the privileged container. If Monitorr itself were
-  compromised, so would the host be. Keep it updated, and keep `ALLOW_CONTAINER_ACTIONS` off
-  where you don't need it.
-- **Service checks and servers can point anywhere** the hub can reach. That's the feature,
-  but it means your login is also the key to probing your network.
+- **Keep it off the internet**, or put HTTPS in front of it (see above).
+- **Set `ALLOWED_HOSTS`** to the names and IPs you open it with (blocks DNS rebinding).
+- **Only allow logs and actions where you need them.**
+- **Update now and then:** pull the new base image and put its digest in the Dockerfile
+  (the command is in the comment there), then `docker compose up -d --build`.
 
 ## Test changes in the sandbox first
 
@@ -171,23 +194,47 @@ Work on a branch, run it next to production, and only merge when it works:
     git switch main && git merge my-change && git push
     docker compose -f docker-compose.dev.yml down
 
-The sandbox is its own container (`monitorr-dev`) on port 8089 with its own
-history in `./data-dev`. It never sends phone alerts. It also starts a pretend
-remote server (`monitorr-agent`); add it on the overview with the address
-`http://monitorr-agent:8088` and the `DEV_AGENT_TOKEN` from `.env`.
+The sandbox needs a `.env` next to the compose file with `AUTH_PASSWORD_HASH`, `AGENT_TOKEN`
+and `DEV_AGENT_TOKEN` (make tokens with `python app.py --new-token`). It has the same
+layout as production, on port 8089, with its own data. It
+never sends phone alerts. It also starts a pretend remote server: add it on the overview
+with the address `https://monitorr-agent:8088` and the pairing code from
+`docker logs monitorr-agent`.
 
 ## What it watches
 
 - CPU (per mode and per thread), load, RAM, swap
 - Every mounted drive, found automatically: space, inodes, read/write speed,
-  SMART health, and a "full in N days" forecast from the last week of growth
+  SMART health (opt-in), and a "full in N days" forecast from the last week of growth
 - Network traffic per interface, temperatures
 - Docker containers: state, CPU, memory, restarts, health checks
 - Top processes by CPU and memory
 
 ## Notes
 
-- Drives mounted after the container starts (USB disks, new NFS shares) still
+- Drives mounted after the agent starts (USB disks, new NFS shares) still
   show up, thanks to the `rslave` mount propagation.
 - Stuck network mounts are marked "not responding" instead of freezing the page.
 - Inside a VM, disks usually don't expose SMART; the page shows "No SMART".
+
+## What's changed
+
+- **Renamed to Monitorr**, with a new icon and a sign-in page.
+- **Several servers:** an overview of server cards (green, or red with alerts or when
+  unreachable) that you can drag, pin and switch between detailed and compact. Every card
+  uses the same ring gauges as the server pages.
+- **Service checks:** websites, ports and ping, with uptime, response times and
+  certificate expiry; failures raise alerts.
+- **Container logs** next to the metrics (click a chart to jump to that moment) and
+  **start/stop/restart** buttons, both opt-in per container.
+- **Security review and hardening:** escaping of everything remote servers send, a strict
+  Content-Security-Policy, cross-site request and clickjacking protection, revocable
+  sessions, limits against login floods, private file permissions.
+- **Least privilege:** the web interface and the collector are separate. The web interface
+  runs unprivileged with no host or Docker access; the collector reaches Docker only through
+  a socket proxy; SMART and privileged mode are opt-in.
+- **Encrypted agents:** remote agents are paired with a code that pins their certificate.
+- **Sign-in:** optional two-factor codes, your password again for sensitive changes,
+  growing delays instead of lockouts, no sign-in over plain HTTP from public addresses,
+  `AUTH_DISABLED` removed, and a security activity log that also goes to ntfy.
+- **Sandbox** (`docker-compose.dev.yml`) for trying changes before they reach your server.

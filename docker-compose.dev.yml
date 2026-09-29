@@ -1,8 +1,9 @@
 # Sandbox: runs your working copy next to production without touching it.
 #   docker compose -f docker-compose.dev.yml up -d --build
 #   open http://localhost:8089
-# It has its own container name, port, and history (./data-dev), and it only listens on this
-# machine. Works on Docker Desktop too, where it monitors Docker's Linux VM.
+# Same layout as docker-compose.yml (unprivileged web interface, agent over a Unix socket, Docker
+# socket proxy), plus a pretend remote server on https://localhost:8090 to pair with.
+# Works on Docker Desktop too, where it monitors Docker's Linux VM.
 name: monitorr-dev
 
 services:
@@ -10,38 +11,109 @@ services:
     build: .
     image: monitorr:dev
     container_name: monitorr-dev
-    pid: host
-    privileged: true
+    environment:
+      ROLE: hub
+      HUB_DB: /data/hub.db
+      LOCAL_AGENT: unix:/run/monitorr/agent.sock
+      AGENT_TOKEN: ${AGENT_TOKEN:?add AGENT_TOKEN to .env}
+      AUTH_USER: ${AUTH_USER:-admin}
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
+      NTFY_URL: ""   # never send phone alerts from the sandbox
     ports:
       - "127.0.0.1:8089:8088"
     volumes:
-      - /:/host:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./data-dev:/data
-    environment:
-      # Same .env file as production: AUTH_PASSWORD_HASH=...
-      AUTH_USER: ${AUTH_USER:-admin}
-      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
-      SAMPLE_INTERVAL: 2
-      RETENTION_DAYS: 2
-      NTFY_URL: ""   # never send phone alerts from the sandbox
-      ALLOW_CONTAINER_ACTIONS: "true"
+      - hub-data-dev:/data
+      - agent-socket-dev:/run/monitorr
+    user: "10001:10001"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    sysctls:
+      net.ipv4.ping_group_range: "0 2147483647"
+    depends_on: [monitorr-dev-agent]
 
-  # A pretend remote server, to test multi-server locally. In the hub, add it with
-  # address http://monitorr-agent:8088 and the token from DEV_AGENT_TOKEN in .env.
+  monitorr-dev-agent:
+    image: monitorr:dev
+    container_name: monitorr-dev-agent
+    environment:
+      ROLE: agent
+      AGENT_LISTEN: unix:/run/monitorr/agent.sock
+      AGENT_SOCKET_GROUP: 10001
+      AGENT_TOKEN: ${AGENT_TOKEN}
+      HOST_ROOT: /host
+      DB_PATH: /data/metrics.db
+      DOCKER_HOST: tcp://docker-proxy:2375
+      ALLOW_LOGS: all
+      ALLOW_CONTAINER_ACTIONS: all
+      RETENTION_DAYS: 2
+      NTFY_URL: ""
+    volumes:
+      - /:/host:ro
+      - ./data-dev:/data
+      - agent-socket-dev:/run/monitorr
+    user: "0:0"
+    pid: host
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_READ_SEARCH]
+    security_opt: ["no-new-privileges:true"]
+    networks: [default, docker-api]
+    depends_on: [docker-proxy]
+
+  # A pretend remote server: pair it on the overview with https://monitorr-agent:8088 and the
+  # pairing code from `docker logs monitorr-agent`.
   monitorr-agent:
     image: monitorr:dev
     container_name: monitorr-agent
-    pid: host
+    environment:
+      ROLE: agent
+      AGENT_LISTEN: tcp
+      AGENT_TOKEN: ${DEV_AGENT_TOKEN:?add DEV_AGENT_TOKEN to .env}
+      HOST_ROOT: /host
+      DB_PATH: /data/metrics.db
+      DOCKER_HOST: tcp://docker-proxy:2375
+      ALLOW_LOGS: demo-web,monitorr-agent
+      ALLOW_CONTAINER_ACTIONS: demo-web
+      ALERT_DISK_WARN: 1  # a low threshold so this server's card shows alerts (red) right away
+      RETENTION_DAYS: 1
+      NTFY_URL: ""
     ports:
       - "127.0.0.1:8090:8088"
     volumes:
       - /:/host:ro
-      - /var/run/docker.sock:/var/run/docker.sock
       - ./data-dev/agent:/data
+    user: "0:0"
+    pid: host
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH]
+    security_opt: ["no-new-privileges:true"]
+    networks: [default, docker-api]
+    depends_on: [docker-proxy]
+
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    container_name: monitorr-dev-docker-proxy
     environment:
-      AGENT_TOKEN: ${DEV_AGENT_TOKEN:-}
-      ALLOW_CONTAINER_ACTIONS: "true"
-      SAMPLE_INTERVAL: 2
-      RETENTION_DAYS: 1
-      ALERT_DISK_WARN: 1  # a low threshold so the agent's card shows alerts (red) right away
+      CONTAINERS: 1
+      POST: 0
+      EVENTS: 0                                    # not needed
+      ALLOW_START: 1
+      ALLOW_STOP: 1
+      ALLOW_RESTARTS: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs: [/run]
+    networks: [docker-api]
+
+volumes:
+  hub-data-dev:
+  agent-socket-dev:
+
+networks:
+  docker-api:
+    internal: true

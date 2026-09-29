@@ -34,7 +34,11 @@ ALLOW_PREFIXES = ("/run/media",)
 VIRTUAL_NICS = ("lo", "veth", "br-", "docker", "virbr", "vnet", "cali", "flannel", "cni")
 NOT_DISKS = ("loop", "ram", "zram", "sr", "fd", "nbd", "dm-", "md")
 IGNORE_MOUNTS = {m.strip() for m in os.environ.get("IGNORE_MOUNTS", "").split(",") if m.strip()}
-DOCKER_SOCK = os.environ.get("DOCKER_SOCK", "/var/run/docker.sock")
+# Docker is reached through a socket proxy that only allows what Monitorr uses (tcp://docker-proxy:2375),
+# or directly through its socket (unix:///var/run/docker.sock) on a plain systemd install.
+DOCKER_HOST = os.environ.get("DOCKER_HOST") or "unix://" + os.environ.get("DOCKER_SOCK", "/var/run/docker.sock")
+# Drive health needs raw disk access (privileges), so it's off unless asked for.
+SMART_ENABLED = os.environ.get("SMART", "").lower() in ("1", "true", "yes", "on")
 # When running in a container, the host's / is mounted here (e.g. /host).
 HOST_ROOT = os.environ.get("HOST_ROOT", "").rstrip("/")
 
@@ -220,17 +224,28 @@ class _UnixHTTP(http.client.HTTPConnection):
         self.sock = s
 
 
-class DockerWatcher(threading.Thread):
-    """Polls the Docker socket every few seconds (never blocks the main sampler)."""
+def docker_connection(timeout=5):
+    if DOCKER_HOST.startswith("tcp://"):
+        host, _, port = DOCKER_HOST[6:].rstrip("/").partition(":")
+        return http.client.HTTPConnection(host, int(port or 2375), timeout=timeout)
+    return _UnixHTTP(DOCKER_HOST.removeprefix("unix://"), timeout)
 
-    def __init__(self, sock=DOCKER_SOCK, interval=5):
+
+def docker_reachable():
+    return DOCKER_HOST.startswith("tcp://") or os.path.exists(DOCKER_HOST.removeprefix("unix://"))
+
+
+class DockerWatcher(threading.Thread):
+    """Polls Docker every few seconds (never blocks the main sampler)."""
+
+    def __init__(self, interval=5):
         super().__init__(daemon=True)
-        self.sock, self.interval = sock, interval
+        self.interval = interval
         self.containers, self.error, self._prev = [], None, {}
-        self.available = os.path.exists(sock)
+        self.available = docker_reachable()
 
     def _get(self, path):
-        conn = _UnixHTTP(self.sock)
+        conn = docker_connection()
         try:
             conn.request("GET", path, headers={"Host": "docker"})
             r = conn.getresponse()
@@ -243,12 +258,14 @@ class DockerWatcher(threading.Thread):
 
     def run(self):
         while True:
-            if os.path.exists(self.sock):
+            if docker_reachable():
                 try:
                     self.poll()
                     self.available, self.error = True, None
                 except PermissionError:
                     self.available, self.error = False, "permission denied on docker.sock"
+                except (ConnectionError, socket.gaierror, TimeoutError) as e:
+                    self.available, self.error = False, f"can't reach {DOCKER_HOST} ({type(e).__name__})"
                 except Exception as e:  # noqa: BLE001
                     self.error = str(e)
             else:
@@ -334,7 +351,8 @@ class SmartWatcher(threading.Thread):
     def __init__(self, interval=600):
         super().__init__(daemon=True)
         self.interval = interval
-        self.available = shutil.which("smartctl") is not None
+        self.enabled = SMART_ENABLED
+        self.available = SMART_ENABLED and shutil.which("smartctl") is not None
         self.data = {}
 
     def run(self):
@@ -349,6 +367,31 @@ class SmartWatcher(threading.Thread):
                     continue
             self.data = res
             time.sleep(self.interval)
+
+
+class _Nic:
+    __slots__ = ("bytes_recv", "bytes_sent")
+
+    def __init__(self, rx, tx):
+        self.bytes_recv, self.bytes_sent = rx, tx
+
+
+def host_net_counters():
+    """Traffic per interface of the host's network, not this container's.
+    With the host's process list visible (pid: host), PID 1 is the host's init and
+    /proc/1/net/dev shows the host's interfaces, so the agent needs no host networking."""
+    if HOST_ROOT:
+        try:
+            out = {}
+            with open("/proc/1/net/dev") as f:
+                for line in f.readlines()[2:]:
+                    name, _, rest = line.partition(":")
+                    v = rest.split()
+                    out[name.strip()] = _Nic(int(v[0]), int(v[8]))
+            return out
+        except (OSError, ValueError, IndexError):
+            pass
+    return psutil.net_io_counters(pernic=True)
 
 
 class Collector:
@@ -373,7 +416,7 @@ class Collector:
         self._t = now
         s = {}
         tot_rx = tot_tx = 0.0
-        for nic, c in psutil.net_io_counters(pernic=True).items():
+        for nic, c in host_net_counters().items():
             if nic.startswith(VIRTUAL_NICS):
                 continue
             p = self._net.get(nic)
@@ -558,6 +601,7 @@ class Collector:
             "containers": containers,
             "docker": {"available": self.docker.available, "error": self.docker.error},
             "smart_available": self.smart.available,
+            "smart_enabled": self.smart.enabled,
             "processes": procs,
             "process_count": nprocs,
             "temps": temps,
