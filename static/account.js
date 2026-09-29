@@ -98,10 +98,25 @@
         <button role="menuitem" type="button" data-signout>${svg(ICON.out)}${esc(t('Sign out'))}</button>
       </div>`;
     const btn = host.querySelector('button'), menu = host.querySelector('.acct-menu');
+    // Lives in <body>, not the header: the header's frosted-glass effect (backdrop-filter) makes it
+    // its own layer, which would trap the menu underneath the page on narrow screens.
+    document.querySelectorAll('body > .acct-menu').forEach(m => m.remove());
+    document.body.appendChild(menu);
     const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
-    btn.onclick = () => { menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); if (!menu.hidden) menu.querySelector('a').focus(); };
+    // just below the avatar, right-aligned with it, but always fully on screen
+    const place = () => {
+      const r = btn.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
+      menu.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + 'px';
+      menu.style.top = Math.max(8, Math.min(r.bottom + 8, innerHeight - h - 8)) + 'px';
+    };
+    btn.onclick = () => {
+      menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden));
+      if (!menu.hidden) { place(); menu.querySelector('a').focus({preventScroll: true}); }
+    };
+    addEventListener('resize', () => { if (!menu.hidden) place(); });
+    addEventListener('scroll', () => { if (!menu.hidden) close(); }, {passive: true});
     menu.querySelector('[data-signout]').onclick = M.signOut;
-    document.addEventListener('pointerdown', e => { if (!host.contains(e.target)) close(); });
+    document.addEventListener('pointerdown', e => { if (!host.contains(e.target) && !menu.contains(e.target)) close(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !menu.hidden) { close(); btn.focus(); } });
   }
 
