@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>Settings · Monitorr</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="forms.css">
+<style>
+:root{
+  --bg:#0D141C; --panel:#131C26; --panel2:#18232F; --raise:#1D2A38;
+  --line:#1F2C3A; --line2:#2A3A4C;
+  --text:#DCE4EC; --muted:#8395A9; --faint:#5A6B7E;
+  --teal:#35D0BA; --sky:#4FA8FF; --violet:#A08CFF; --amber:#F5B942; --rose:#FF6F91;
+  --ok:#3DD68C; --warn:#F5B942; --crit:#FF5A5F;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--sky);outline-offset:2px;border-radius:4px}
+[hidden]{display:none!important}
+a{color:var(--accent,var(--sky))}
+
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px 24px;backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .back{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;color:var(--muted)}
+.top .back:hover{color:var(--text);background:var(--panel)}
+.top h1{margin:0;font-size:17px;font-weight:600}
+.spacer{flex:1}
+.btn{border:1px solid var(--line2);background:var(--panel);padding:7px 13px;border-radius:8px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.btn:hover{background:var(--panel2)}
+.btn.danger{color:var(--crit);border-color:color-mix(in srgb,var(--crit) 40%,var(--line2))}
+.btn:disabled{opacity:.55;cursor:default}
+
+.wrap{max-width:1040px;margin:0 auto;padding:24px;display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px}
+.tabs{position:sticky;top:82px;align-self:start;display:flex;flex-direction:column;gap:2px}
+.tabs a,.tabs button{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--muted);text-decoration:none;border:0;background:none;cursor:pointer;font-size:14px;text-align:left}
+.tabs a:hover,.tabs button:hover{color:var(--text);background:var(--panel)}
+.tabs a[aria-current=page]{color:var(--text);background:var(--panel2);box-shadow:inset 3px 0 0 var(--accent,var(--teal))}
+.tabs hr{border:0;border-top:1px solid var(--line);margin:10px 4px}
+.tabs .out{color:var(--crit)}
+.tabs svg{flex:none}
+
+section{display:grid;gap:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+.card h2{margin:0 0 4px;font-size:16px;font-weight:600}
+.card p.hint{margin:0 0 16px;color:var(--muted);font-size:13px}
+.row{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row>label,.row>.lbl{font-size:13.5px}
+.row small{display:block;color:var(--faint);font-size:12px}
+.seg{display:inline-flex;flex-wrap:wrap;background:var(--bg);border:1px solid var(--line2);border-radius:9px;padding:2px}
+.seg button{border:0;background:none;padding:6px 12px;border-radius:7px;font-size:13px;color:var(--muted);cursor:pointer}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed=true]{background:var(--raise);color:var(--text);box-shadow:inset 0 0 0 1px var(--line2)}
+select,.field input{background:var(--bg);border:1px solid var(--line2);border-radius:9px;padding:8px 11px;font-size:13.5px;min-width:220px;max-width:100%}
+.field{display:grid;gap:6px;margin-bottom:14px}
+.field label{font-size:12.5px;color:var(--muted)}
+.field input{width:100%;max-width:420px}
+.field input:focus,select:focus{outline:none;border-color:var(--accent,var(--teal));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent,var(--teal)) 20%,transparent)}
+.field input[readonly]{color:var(--muted)}
+.swatches{display:flex;gap:10px}
+.swatches button{width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;box-shadow:inset 0 0 0 2px var(--panel)}
+.swatches button[aria-pressed=true]{border-color:var(--text)}
+.err{min-height:18px;margin:4px 0 0;color:var(--crit);font-size:13px}
+.okmsg{color:var(--ok);font-size:13px;margin:4px 0 0;min-height:18px}
+
+.avatar-edit{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.presets{display:grid;grid-template-columns:repeat(7,40px);gap:10px}
+.presets button{padding:0;border:2px solid transparent;border-radius:50%;background:none;cursor:pointer;line-height:0}
+.presets button[aria-pressed=true]{border-color:var(--accent,var(--teal))}
+.avatar-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+.tfa .state{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.tfa .state i{width:8px;height:8px;border-radius:50%;background:var(--faint)} .tfa .state.on i{background:var(--ok)}
+.secret{font:500 15px var(--mono);letter-spacing:.08em;background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:8px 12px;user-select:all;word-break:break-all;margin:8px 0 12px;max-width:420px}
+.inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.inline input{width:170px}
+.codes{display:grid;grid-template-columns:repeat(2,max-content);gap:6px 28px;font:500 15px var(--mono);background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:14px 18px;margin:10px 0}
+.warnbox{border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line2));background:color-mix(in srgb,var(--warn) 8%,transparent);border-radius:10px;padding:12px 14px;margin:10px 0;font-size:13px}
+.act{max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.act div{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px}
+.act div:last-child{border-bottom:0}
+.act time{color:var(--faint);white-space:nowrap;grid-row:span 2}
+.act small{color:var(--muted);font-size:12px}
+.act .empty{display:block;color:var(--muted)}
+code{font:12.5px var(--mono);background:var(--bg);padding:1px 6px;border-radius:5px}
+
+#toast{position:fixed;right:18px;bottom:18px;z-index:50;padding:10px 14px;border-radius:10px;background:var(--raise);border:1px solid var(--line2);font-size:13px;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;pointer-events:none}
+#toast.on{opacity:1;transform:none}
+#toast[data-k=err]{border-color:var(--crit);color:var(--crit)}
+
+@media (max-width:760px){
+  .top{padding:10px 16px}
+  .wrap{grid-template-columns:minmax(0,1fr);padding:16px;gap:16px}
+  .tabs{position:static;flex-direction:row;flex-wrap:wrap}
+  .tabs hr{display:none}
+  .row{grid-template-columns:minmax(0,1fr);gap:8px}
+  .presets{grid-template-columns:repeat(6,40px)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<link rel="stylesheet" href="theme.css">
+<script src="lang.js"></script>
+<script src="i18n.js"></script>
+<script src="account.js"></script>
+</head>
+<body>
+<header class="top">
+  <a class="back" href="./" data-i18n-attr="title,aria-label" title="All servers" aria-label="All servers"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></a>
+  <img src="icon.svg" width="30" height="30" alt="">
+  <h1 data-i18n>Settings</h1>
+  <span class="spacer"></span>
+  <div id="account"></div>
+</header>
+
+<div class="wrap">
+  <nav class="tabs" aria-label="Settings">
+    <a href="#customization" data-tab="panel-customization"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg><span data-i18n>Customization</span></a>
+    <a href="#account" data-tab="panel-account"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.8 14c.6-2.8 2.7-4.3 5.2-4.3s4.6 1.5 5.2 4.3"/></svg><span data-i18n>Account</span></a>
+    <a href="#security" data-tab="panel-security"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 13 3.8v4c0 3-2.1 5.3-5 6.4-2.9-1.1-5-3.4-5-6.4v-4z"/></svg><span data-i18n>Security</span></a>
+    <hr>
+    <button type="button" class="out" id="signout"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 11 13.5 8l-3-3M13.5 8H6"/></svg><span data-i18n>Sign out</span></button>
+  </nav>
+
+  <main>
+    <!-- ================= Customization ================= -->
+    <section id="panel-customization" data-panel>
+      <div class="card">
+        <h2 data-i18n>Appearance</h2>
+        <p class="hint" data-i18n>Saved to your account, so every device looks the same.</p>
+        <div class="row"><span class="lbl" data-i18n>Theme</span>
+          <div class="seg" data-pref="theme"><button data-v="dark" data-i18n>Dark</button><button data-v="light" data-i18n>Light</button><button data-v="system" data-i18n>Match my device</button></div></div>
+        <div class="row"><span class="lbl" data-i18n>Accent colour</span>
+          <div class="swatches" data-pref="accent">
+            <button data-v="teal" style="background:#35D0BA" data-i18n-attr="title,aria-label" title="Teal" aria-label="Teal"></button>
+            <button data-v="blue" style="background:#4FA8FF" data-i18n-attr="title,aria-label" title="Blue" aria-label="Blue"></button>
+            <button data-v="violet" style="background:#A08CFF" data-i18n-attr="title,aria-label" title="Violet" aria-label="Violet"></button>
+            <button data-v="amber" style="background:#F5B942" data-i18n-attr="title,aria-label" title="Amber" aria-label="Amber"></button>
+            <button data-v="rose" style="background:#FF6F91" data-i18n-attr="title,aria-label" title="Rose" aria-label="Rose"></button>
+          </div></div>
+        <div class="row"><label for="p-lang" data-i18n>Language</label>
+          <select id="p-lang" data-pref="lang"><option value="" data-i18n>Same as my browser</option></select></div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n>Defaults</h2>
+        <p class="hint" data-i18n>How Monitorr shows things until you change them on a page.</p>
+        <div class="row"><span class="lbl" data-i18n>Time format</span>
+          <div class="seg" data-pref="time_format"><button data-v="24h" data-i18n>24-hour</button><button data-v="12h" data-i18n>12-hour</button></div></div>
+        <div class="row"><span class="lbl" data-i18n>Temperature</span>
+          <div class="seg" data-pref="temp_unit"><button data-v="C">°C</button><button data-v="F">°F</button></div></div>
+        <div class="row"><label for="p-range"><span data-i18n>Server pages open on</span><small data-i18n>The time range charts start with</small></label>
+          <select id="p-range" data-pref="default_range"><option value="live" data-i18n>Live</option><option value="1h" data-i18n>Last hour</option><option value="6h" data-i18n>Last 6 hours</option><option value="24h" data-i18n>Last 24 hours</option><option value="7d" data-i18n>Last 7 days</option></select></div>
+        <div class="row"><span class="lbl" data-i18n>Server cards</span>
+          <div class="seg" id="p-density"><button data-v="detailed" data-i18n>Detailed</button><button data-v="compact" data-i18n>Compact</button></div></div>
+        <div class="row"><label for="p-start"><span data-i18n>After signing in, open</span></label>
+          <select id="p-start" data-pref="start_page"><option value="overview" data-i18n>All servers</option></select></div>
+      </div>
+    </section>
+
+    <!-- ================= Account ================= -->
+    <section id="panel-account" data-panel hidden>
+      <div class="card">
+        <h2 data-i18n>Picture</h2>
+        <p class="hint" data-i18n>Pick one, or upload your own. Uploads are cropped to a square and shrunk before they're sent.</p>
+        <div class="avatar-edit">
+          <div id="avatar-big"></div>
+          <div>
+            <div class="presets" id="presets" role="group" data-i18n-attr="aria-label" aria-label="Pictures to choose from"></div>
+            <div class="avatar-actions">
+              <label class="btn" for="upload"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 11V2.5M4.5 6 8 2.5 11.5 6M2.5 11v2.5h11V11"/></svg><span data-i18n>Upload a picture</span></label>
+              <input type="file" id="upload" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+              <button type="button" class="btn" id="use-initials" data-i18n>Use my initials</button>
+            </div>
+            <p class="err" id="avatar-err" role="alert"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n>Profile</h2>
+        <p class="hint" data-i18n>Shown in the account menu and in the activity log.</p>
+        <form id="profile-form">
+          <div class="field"><label for="f-name" data-i18n>Display name</label><input id="f-name" maxlength="60" autocomplete="name"></div>
+          <div class="field"><label for="f-email" data-i18n>Email</label><input id="f-email" type="email" maxlength="254" autocomplete="email">
+            <small style="color:var(--faint);font-size:12px" data-i18n>Monitorr doesn't send email. It's only shown on your profile.</small></div>
+          <div class="field"><label for="f-user" data-i18n>Username</label><input id="f-user" readonly>
+            <small style="color:var(--faint);font-size:12px"><span data-i18n>Used to sign in. Change it on the server:</span> <code>AUTH_USER</code></small></div>
+          <button class="btn primary" data-i18n>Save profile</button>
+          <p class="err" id="profile-err" role="alert"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- ================= Security ================= -->
+    <section id="panel-security" data-panel hidden>
+      <div class="card">
+        <h2 data-i18n>Password</h2>
+        <p class="hint" data-i18n>Changing it signs you out everywhere else.</p>
+        <form id="pw-form" autocomplete="on">
+          <input type="text" autocomplete="username" id="pw-user" hidden>
+          <div class="field"><label for="pw-cur" data-i18n>Current password</label><input id="pw-cur" type="password" autocomplete="current-password" required></div>
+          <div class="field"><label for="pw-new" data-i18n>New password</label><input id="pw-new" type="password" autocomplete="new-password" minlength="10" required>
+            <small style="color:var(--faint);font-size:12px" data-i18n>At least 10 characters. A few unrelated words make a strong one.</small></div>
+          <div class="field"><label for="pw-new2" data-i18n>Repeat the new password</label><input id="pw-new2" type="password" autocomplete="new-password" required></div>
+          <div class="field" id="pw-code-row" hidden><label for="pw-code" data-i18n>Code from your authenticator app</label><input id="pw-code" inputmode="numeric" autocomplete="one-time-code" maxlength="12"></div>
+          <button class="btn primary" data-i18n>Change password</button>
+          <p class="err" id="pw-err" role="alert"></p>
+        </form>
+        <p class="hint" style="margin:16px 0 0"><span data-i18n>Forgot it? On the server, run</span> <code>python app.py --reset-password</code>.</p>
+      </div>
+
+      <div class="card tfa">
+        <h2 data-i18n>Two-factor sign-in</h2>
+        <p class="hint" data-i18n>A 6-digit code from an authenticator app at every sign-in, so a stolen password alone can't get in.</p>
+        <div id="tfa"></div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n>Sessions</h2>
+        <p class="hint" data-i18n>Signed in on a computer you no longer use? Sign out everywhere except here.</p>
+        <button type="button" class="btn" id="others" data-i18n>Sign out everywhere else</button>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n>Recent activity</h2>
+        <p class="hint" data-i18n>Sign-ins from new addresses and changes to servers, checks, containers and security. Also sent to ntfy.</p>
+        <div class="act" id="activity"></div>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="reauth.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const M = window.Monitorr;
+let me = null, toastTimer = null;
+
+function toast(msg, kind = '') {
+  const el = $('#toast'); el.textContent = msg; el.dataset.k = kind; el.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), kind === 'err' ? 6000 : 2200);
+}
+async function api(url, opts = {}) {
+  const r = await fetch(url, {cache: 'no-store', ...opts});
+  if (r.status === 401) { location.href = 'login.html'; throw new Error('signed out'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || t('Something went wrong'));
+  return j;
+}
+const send = (url, method, body) => api(url, {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+
+/* ---------------- tabs ---------------- */
+function showTab() {
+  const id = {'#account': 'panel-account', '#security': 'panel-security'}[location.hash] || 'panel-customization';
+  document.querySelectorAll('[data-panel]').forEach(p => p.hidden = p.id !== id);
+  document.querySelectorAll('.tabs a').forEach(a => { if (a.dataset.tab === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  if (id === 'panel-security') loadSecurity();
+  scrollTo(0, 0);
+}
+addEventListener('hashchange', showTab);
+$('#signout').addEventListener('click', M.signOut);
+
+/* ---------------- customization ---------------- */
+function paintPrefs() {
+  const p = M.prefs;
+  document.querySelectorAll('[data-pref]').forEach(el => {
+    const v = p[el.dataset.pref];
+    if (el.tagName === 'SELECT') el.value = v;
+    else el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  });
+}
+async function savePref(key, value) {
+  try {
+    const prefs = await send('api/me/prefs', 'PUT', {[key]: value});
+    const langChanged = key === 'lang' && value !== M.prefs.lang;
+    M.refresh({...me, prefs}); me.prefs = prefs; paintPrefs();
+    if (langChanged) { location.reload(); return; }
+    toast(t('Saved'));
+  } catch (e) { toast(e.message, 'err'); paintPrefs(); }
+}
+document.querySelectorAll('[data-pref]').forEach(el => {
+  if (el.tagName === 'SELECT') el.addEventListener('change', () => savePref(el.dataset.pref, el.value));
+  else el.addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) savePref(el.dataset.pref, b.dataset.v); });
+});
+async function loadDensity() {
+  const o = await api('api/prefs/overview');
+  document.querySelectorAll('#p-density button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === o.density)));
+  $('#p-density').onclick = async e => {
+    const b = e.target.closest('button[data-v]'); if (!b) return;
+    try { await send('api/prefs/overview', 'PUT', {...o, density: b.dataset.v}); o.density = b.dataset.v; await loadDensity(); toast(t('Saved')); }
+    catch (err) { toast(err.message, 'err'); }
+  };
+}
+
+/* ---------------- account ---------------- */
+function paintAccount() {
+  $('#avatar-big').innerHTML = M.avatarHTML(me, 88);
+  $('#presets').innerHTML = Array.from({length: M.presetCount}, (_, i) => `<button type="button" data-p="p${i + 1}" aria-pressed="${me.avatar === 'p' + (i + 1)}" aria-label="${esc(t('Picture {n}', {n: i + 1}))}"><span class="avatar" style="width:40px;height:40px">${M.presetSVG(i + 1)}</span></button>`).join('');
+  $('#f-name').value = me.display_name; $('#f-email').value = me.email; $('#f-user').value = $('#pw-user').value = me.user;
+  $('#f-name').placeholder = me.user;
+}
+async function setAvatar(value) {
+  $('#avatar-err').textContent = '';
+  try { me = await send('api/me/profile', 'PUT', {avatar: value}); M.refresh(me); paintAccount(); toast(t('Saved')); }
+  catch (e) { $('#avatar-err').textContent = e.message; }
+}
+$('#presets').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (b) setAvatar(b.dataset.p); });
+$('#use-initials').addEventListener('click', async () => {
+  try { me = await api('api/me/avatar', {method: 'DELETE'}); M.refresh(me); paintAccount(); toast(t('Saved')); }
+  catch (e) { $('#avatar-err').textContent = e.message; }
+});
+// The picture is cropped to a square, shrunk to 256 px and re-encoded here, so what's uploaded is small,
+// and it's a fresh image made by the browser (not the original file with whatever else it carried).
+$('#upload').addEventListener('change', async e => {
+  const file = e.target.files[0]; e.target.value = ''; $('#avatar-err').textContent = '';
+  if (!file) return;
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { $('#avatar-err').textContent = t('Use a PNG, JPEG, WebP or GIF picture'); return; }
+  if (file.size > 20 * 1024 * 1024) { $('#avatar-err').textContent = t('That picture is too large'); return; }
+  try {
+    const img = await createImageBitmap(file);
+    const side = Math.min(img.width, img.height), c = document.createElement('canvas');
+    c.width = c.height = 256;
+    c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 256, 256);
+    let blob = null;
+    for (const [type, q] of [['image/webp', .86], ['image/jpeg', .85], ['image/jpeg', .7]]) {
+      blob = await new Promise(r => c.toBlob(r, type, q));
+      if (blob && blob.size < 60000) break;
+    }
+    me = await api('api/me/avatar', {method: 'PUT', headers: {'Content-Type': blob.type}, body: blob});
+    M.refresh(me); paintAccount(); toast(t('Saved'));
+  } catch (err) { $('#avatar-err').textContent = err.message || t("That picture couldn't be read"); }
+});
+$('#profile-form').addEventListener('submit', async e => {
+  e.preventDefault(); $('#profile-err').textContent = '';
+  try { me = await send('api/me/profile', 'PUT', {display_name: $('#f-name').value, email: $('#f-email').value}); M.refresh(me); paintAccount(); toast(t('Saved')); }
+  catch (err) { $('#profile-err').textContent = err.message; }
+});
+
+/* ---------------- security ---------------- */
+$('#pw-form').addEventListener('submit', async e => {
+  e.preventDefault(); $('#pw-err').textContent = '';
+  if ($('#pw-new').value !== $('#pw-new2').value) { $('#pw-err').textContent = t("The new passwords don't match."); return; }
+  try {
+    await send('api/me/password', 'POST', {current: $('#pw-cur').value, new: $('#pw-new').value, code: $('#pw-code').value});
+    e.target.reset(); $('#pw-user').value = me.user;
+    toast(t('Password changed. You were signed out everywhere else.'));
+  } catch (err) { $('#pw-err').textContent = err.message; }
+});
+$('#others').addEventListener('click', async () => {
+  if (!confirm(t('Sign out on every other browser and device?'))) return;
+  try { await send('api/me/sign-out-others', 'POST', {}); toast(t('Signed out everywhere else')); loadSecurity(); }
+  catch (e) { toast(e.message, 'err'); }
+});
+
+function codesHTML(codes) {
+  const text = codes.join('\n');
+  return `<div class="warnbox">${esc(t('Save these recovery codes somewhere safe, like a password manager. Each one works once instead of a code from your app, if you lose your phone. They are shown only now.'))}</div>
+    <div class="codes">${codes.map(c => `<span>${esc(c)}</span>`).join('')}</div>
+    <div class="inline"><button type="button" class="btn" data-copy="${esc(text)}">${esc(t('Copy'))}</button><button type="button" class="btn" data-download="${esc(text)}">${esc(t('Download'))}</button><button type="button" class="btn primary" data-done>${esc(t("I've saved them"))}</button></div>`;
+}
+function renderTfa(state, codes) {
+  const el = $('#tfa');
+  $('#pw-code-row').hidden = !state.totp;
+  if (codes) { el.innerHTML = codesHTML(codes); return; }
+  el.innerHTML = state.totp
+    ? `<div class="state on"><i></i>${esc(t('On. Signing in needs a code from your authenticator app.'))}</div>
+       <p class="hint">${esc(t('{n} recovery codes left.', {n: state.recovery_left}))}</p>
+       <div class="inline"><input id="tfa-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="${esc(t('Current code'))}" aria-label="${esc(t('Current code'))}">
+       <button type="button" class="btn" id="tfa-codes">${esc(t('New recovery codes'))}</button><button type="button" class="btn danger" id="tfa-off">${esc(t('Turn off'))}</button></div>
+       <p class="err" id="tfa-err" role="alert"></p>`
+    : `<div class="state"><i></i>${esc(t('Off.'))}</div>
+       <button type="button" class="btn primary" id="tfa-start">${esc(t('Turn on'))}</button><p class="err" id="tfa-err" role="alert"></p>`;
+}
+async function tfaCall(url, body) {
+  $('#tfa-err') && ($('#tfa-err').textContent = '');
+  try { return await send(url, 'POST', body || {}); }
+  catch (e) { if ($('#tfa-err')) $('#tfa-err').textContent = e.message; return null; }
+}
+$('#tfa').addEventListener('click', async e => {
+  const id = e.target.id;
+  if (id === 'tfa-start') {
+    const r = await tfaCall('api/2fa/start'); if (!r) return;
+    $('#tfa').innerHTML = `<p>${esc(t('1. In your authenticator app (Google Authenticator, 1Password, Aegis…), add an account with this key, or open it in the app on your phone:'))} <a href="${esc(r.uri)}">${esc(t('open in app'))}</a></p>
+      <div class="secret">${esc(r.secret.replace(/(.{4})/g, '$1 ').trim())}</div>
+      <p>${esc(t('2. Enter the 6-digit code it shows:'))}</p>
+      <div class="inline"><input id="tfa-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" aria-label="${esc(t('Code'))}"><button type="button" class="btn primary" id="tfa-confirm">${esc(t('Confirm'))}</button></div>
+      <p class="err" id="tfa-err" role="alert"></p>`;
+    $('#tfa-code').focus();
+  } else if (id === 'tfa-confirm') {
+    const r = await tfaCall('api/2fa/confirm', {code: $('#tfa-code').value}); if (r) renderTfa({totp: true}, r.recovery_codes);
+  } else if (id === 'tfa-off') {
+    if (await tfaCall('api/2fa/disable', {code: $('#tfa-code').value})) loadSecurity();
+  } else if (id === 'tfa-codes') {
+    const r = await tfaCall('api/2fa/recovery-codes', {code: $('#tfa-code').value}); if (r) renderTfa({totp: true}, r.recovery_codes);
+  } else if (e.target.dataset.copy != null) {
+    try { await navigator.clipboard.writeText(e.target.dataset.copy); toast(t('Copied')); } catch { toast(t("Couldn't copy: select the codes and copy them"), 'err'); }
+  } else if (e.target.dataset.download != null) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([`Monitorr recovery codes (${me.user})\n\n${e.target.dataset.download}\n`], {type: 'text/plain'}));
+    a.download = 'monitorr-recovery-codes.txt'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  } else if (e.target.dataset.done != null) {
+    loadSecurity();
+  }
+});
+const when = ts => new Date(ts * 1000).toLocaleString(I18N.locale, {month: 'short', day: 'numeric'}) + ' ' + M.fmtClock(ts, false);
+async function loadSecurity() {
+  try {
+    const [sec, fresh] = await Promise.all([api('api/security'), api('api/me')]);
+    me = fresh; renderTfa(fresh);
+    $('#activity').innerHTML = sec.activity.length
+      ? sec.activity.map(a => `<div><time>${esc(when(a.ts))}</time><span>${esc(a.title)}</span><small>${esc(a.detail)}</small></div>`).join('')
+      : `<div class="empty">${esc(t('Nothing yet.'))}</div>`;
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+/* ---------------- start ---------------- */
+(async () => {
+  me = await M.ready;
+  if (!me) { location.href = 'login.html'; return; }
+  const langSel = $('#p-lang');
+  for (const [code, name] of Object.entries(I18N.LANGS)) langSel.insertAdjacentHTML('beforeend', `<option value="${code}">${esc(name)}</option>`);
+  try {
+    const servers = await api('api/servers');
+    for (const s of servers) $('#p-start').insertAdjacentHTML('beforeend', `<option value="server:${esc(s.id)}">${esc(s.name)}</option>`);
+  } catch { /* the overview choice still works */ }
+  paintPrefs(); paintAccount(); loadDensity().catch(() => {}); showTab();
+})();
+</script>
+</body>
+</html>

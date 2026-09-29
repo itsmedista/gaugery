@@ -48,7 +48,10 @@ def harden(app, page_csp=None, hsts=True):
         resp = JSONResponse({"detail": bad[1]}, status_code=bad[0]) if bad else await call_next(request)
         for k, v in BASE_HEADERS.items():
             resp.headers.setdefault(k, v)
-        if page_csp and resp.headers.get("content-type", "").startswith("text/html"):
+        # Chosen by where the request went, not by the answer's type: a "304 Not Modified" for a page
+        # has no type, and browsers merge its headers into the cached page. Giving it the API's
+        # lock-everything policy broke every page on reload.
+        if page_csp and not request.url.path.startswith("/api/"):
             resp.headers["Content-Security-Policy"] = page_csp.value()
         else:
             resp.headers.setdefault("Content-Security-Policy", API_CSP)

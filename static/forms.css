@@ -1,5 +1,5 @@
 /* Dialogs and form fields shared by every Monitorr page (colors from each page's tokens). */
-.btn.primary{border:0;color:#08201C;font-weight:600;background:linear-gradient(90deg,var(--teal),var(--sky))}
+.btn.primary{border:0;color:#08201C;font-weight:600;background:linear-gradient(90deg,var(--accent,var(--teal)),var(--accent2,var(--sky)))}
 .btn.primary:hover{filter:brightness(1.07)}
 .btn.primary:disabled{opacity:.6;cursor:default;filter:none}
 dialog{width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:0;border:1px solid var(--line2);border-radius:14px;background:var(--panel);color:var(--text);box-shadow:0 30px 80px -20px rgba(0,0,0,.7)}

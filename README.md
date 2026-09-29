@@ -132,6 +132,25 @@ Every container action asks for your password if you last entered it more than 1
 minutes ago, is recorded on both sides, and goes to ntfy. Monitorr won't stop its own
 container.
 
+## Your account and settings
+
+Click your picture (top right) for **Settings** or **Sign out**. Settings are saved to your
+account, so every device looks the same:
+
+- **Customization:** dark, light or match-your-device theme and an accent colour; language
+  (English, Français, Español, Deutsch, or your browser's); 12- or 24-hour time; °C or °F; the
+  time range server pages open on; card size; and which page opens after signing in.
+- **Account:** a built-in picture, your own upload (cropped and shrunk in your browser, stored
+  and served only as a checked PNG, JPEG or WebP), or your initials; display name and email
+  (Monitorr doesn't send email). The username is set on the server (`AUTH_USER`).
+- **Security:** change your password (it signs out every other session), two-factor sign-in
+  with 8 one-time recovery codes, "sign out everywhere else", and the activity log.
+
+Forgot the password? On the server: `python app.py --reset-password` (Docker:
+`docker compose exec monitorr python app.py --reset-password`), then restart the web
+interface. A password changed in Settings is kept in the database and wins over
+`AUTH_PASSWORD_HASH`, until you change `AUTH_PASSWORD_HASH` on the server; then that wins again.
+
 ## Signing in
 
 - One user: `AUTH_USER` (default `admin`) and `AUTH_PASSWORD_HASH`, a scrypt hash
