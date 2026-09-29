@@ -260,6 +260,20 @@ class Checks:
         self._evaluate(c["server"])
         return st
 
+    async def _get_pinned(self, url, verify, timeout):
+        """GET `url`, connecting to the IP address that passed the guard rather than resolving the
+        name again: otherwise a DNS answer could change in between and point at a blocked address.
+        The name still goes in the Host header and TLS SNI, so virtual hosts and certificates work."""
+        u = urlsplit(url)
+        https = u.scheme == "https"
+        port = u.port or (443 if https else 80)
+        ip = (await netguard.resolve(u.hostname or "", port))[0]
+        netloc = (f"[{ip}]" if ":" in ip else ip) + f":{port}"
+        host_header = u.netloc.rsplit("@", 1)[-1]
+        return await self._http[verify].get(u._replace(netloc=netloc).geturl(), timeout=timeout,
+                                            headers={"Host": host_header},
+                                            extensions={"sni_hostname": u.hostname} if https else {})
+
     async def _probe(self, c):
         """-> (ok, detail, ms or None to use wall time)"""
         try:
@@ -273,12 +287,10 @@ class Checks:
             url = c["target"]
             try:
                 for _ in range(6):
-                    u = urlsplit(url)
-                    await netguard.resolve(u.hostname or "", u.port or (443 if u.scheme == "https" else 80))
-                    r = await self._http[bool(c["verify_tls"])].get(url, timeout=t)
+                    r = await self._get_pinned(url, bool(c["verify_tls"]), t)
                     if not (r.is_redirect and r.headers.get("location")):
                         break
-                    url = urljoin(str(r.url), r.headers["location"])
+                    url = urljoin(url, r.headers["location"])  # against the name, not the IP we connected to
                     if urlsplit(url).scheme not in ("http", "https"):
                         return False, "Redirected to something that isn't a web address", None
                 else:

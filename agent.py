@@ -360,16 +360,19 @@ def create_app(token):
         return {"ok": True, "message": f"{name} {done}"}
 
     # ---------- one-time hand-over of the hub's data from before the split ----------
-    @app.get("/api/legacy-export")
-    def api_legacy_export():
-        if not monitor.legacy_tables():
-            raise HTTPException(404, "Nothing to hand over")
-        return monitor.legacy_export()
+    # Only for the web interface on the same machine (Unix socket). A network-facing agent never
+    # offers it: its old database could hold other servers' tokens.
+    if LISTEN.startswith("unix:"):
+        @app.get("/api/legacy-export")
+        def api_legacy_export():
+            if not monitor.legacy_tables():
+                raise HTTPException(404, "Nothing to hand over")
+            return monitor.legacy_export()
 
-    @app.post("/api/legacy-export/done")
-    def api_legacy_done():
-        monitor.legacy_drop()
-        return {"ok": True}
+        @app.post("/api/legacy-export/done")
+        def api_legacy_done():
+            monitor.legacy_drop()
+            return {"ok": True}
 
     return app
 
