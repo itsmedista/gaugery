@@ -34,7 +34,9 @@ html[data-theme=light] .btn.primary{color:#fff}
 #account>button{display:flex;align-items:center;gap:8px;border:1px solid var(--line2);background:var(--panel);border-radius:999px;padding:3px 10px 3px 3px;cursor:pointer;color:var(--text);font:inherit;font-size:13px}
 #account>button:hover{background:var(--panel2)}
 #account>button .nm{max-width:14ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.acct-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:40;min-width:230px;padding:6px;border-radius:12px;background:var(--raise);
+/* fixed to the screen and placed by account.js under the avatar, so no header layout or scrolling
+   area can hide or clip it */
+.acct-menu{position:fixed;z-index:1000;min-width:230px;max-width:calc(100vw - 16px);padding:6px;border-radius:12px;background:var(--raise);
   border:1px solid var(--line2);box-shadow:0 18px 44px -14px var(--shadow)}
 .acct-menu .who{display:flex;gap:10px;align-items:center;padding:8px 10px 10px;border-bottom:1px solid var(--line2);margin-bottom:5px}
 .acct-menu .who b{display:block;font-size:14px}
