@@ -155,10 +155,13 @@ interface. A password changed in Settings is kept in the database and wins over
 
 - One user: `AUTH_USER` (default `admin`) and `AUTH_PASSWORD_HASH`, a scrypt hash
   made by `python app.py --hash-password`. The plain password is never stored.
-- **Two-factor sign-in:** Security (shield icon) → Turn on, then scan or type the key
-  into any authenticator app. Lost your phone? On the server:
+- **Two-factor sign-in:** Settings → Security → Turn on, then scan or type the key into
+  any authenticator app. Save the 8 recovery codes it shows: each one signs you in once
+  instead of a code. Lost your phone and the codes? On the server:
   `docker compose exec monitorr python app.py --disable-2fa` (Docker) or
   `sudo -u monitorr ... app.py --disable-2fa` with the settings loaded (systemd).
+- Forgot the password: `python app.py --reset-password` on the server (see
+  [Your account and settings](#your-account-and-settings)).
 - Sensitive changes (servers, service checks, container actions, two-factor) ask for your
   password again after 15 minutes, so a stolen session can look but not change anything.
 - Sessions last `SESSION_DAYS` (default 30) and are revoked at sign-out. Changing the
@@ -256,22 +259,59 @@ with the address `https://monitorr-agent:8088` and the pairing code from
 
 ## What's changed
 
+Newest first. Each entry links to its pull request, which has the details and test results.
+
+### Account menu on every screen size ([#5](https://github.com/itsmedista/server-monitor/pull/5))
+- On phones and tablets the account menu opened behind the dashboard. It now always
+  opens on top, under your picture, fully on screen.
+
+### Settings and three more languages ([#4](https://github.com/itsmedista/server-monitor/pull/4))
+- **Account menu** (your picture, top right) with Settings and Sign out on every page.
+- **Settings:**
+  - **Customization:** theme (dark, light or your device's), accent colour, language,
+    12/24-hour time, °C/°F, default time range, card size and start page, all saved to
+    your account.
+  - **Account:** built-in picture, your own upload or initials; name and email.
+  - **Security:** change password, two-factor with recovery codes, sign out everywhere
+    else, and the activity log.
+- **French, Spanish and German** interface.
+- `python app.py --reset-password` for a forgotten password.
+- **Fixed:** reloading a page could leave it blank and unstyled.
+
+### Security check of every mitigation ([#3](https://github.com/itsmedista/server-monitor/pull/3))
+- Every item of the security plan re-tested on the current version, and the earlier attacks re-run.
+- **Fixed:**
+  - `TLS=auto` no longer turns on HSTS, which would have locked you out of a self-signed page.
+  - Web service checks connect to the address that passed the safety check (no DNS rebinding).
+  - The one-time data hand-over only exists on the local agent.
+  - The systemd agent keeps only the rights it needs (systemd exposure score 8.8 → 4.6).
+
+### Installer asks for its settings ([#2](https://github.com/itsmedista/server-monitor/pull/2))
+- `install.sh` asks where to listen, the port, username, allowed host names, logs and
+  actions, SMART and ntfy, checks the answers, and writes `/etc/monitorr.env`.
+- `--reconfigure` asks again; updates keep your settings.
+
+### Monitorr ([#1](https://github.com/itsmedista/server-monitor/pull/1))
 - **Renamed to Monitorr**, with a new icon and a sign-in page.
-- **Several servers:** an overview of server cards (green, or red with alerts or when
-  unreachable) that you can drag, pin and switch between detailed and compact. Every card
-  uses the same ring gauges as the server pages.
+- **Several servers:** an overview of same-size server cards (green, or red with alerts or
+  when unreachable) that you can drag, pin and switch between detailed and compact.
 - **Service checks:** websites, ports and ping, with uptime, response times and
   certificate expiry; failures raise alerts.
 - **Container logs** next to the metrics (click a chart to jump to that moment) and
   **start/stop/restart** buttons, both opt-in per container.
-- **Security review and hardening:** escaping of everything remote servers send, a strict
-  Content-Security-Policy, cross-site request and clickjacking protection, revocable
-  sessions, limits against login floods, private file permissions.
-- **Least privilege:** the web interface and the collector are separate. The web interface
-  runs unprivileged with no host or Docker access; the collector reaches Docker only through
-  a socket proxy; SMART and privileged mode are opt-in.
+- **Least privilege:**
+  - The web interface runs unprivileged with no host or Docker access, and a separate agent collects the data.
+  - Docker is reached through two socket proxies: read-only, and start/stop/restart only.
+  - SMART and privileged mode are opt-in.
 - **Encrypted agents:** remote agents are paired with a code that pins their certificate.
-- **Sign-in:** optional two-factor codes, your password again for sensitive changes,
-  growing delays instead of lockouts, no sign-in over plain HTTP from public addresses,
-  `AUTH_DISABLED` removed, and a security activity log that also goes to ntfy.
+- **Sign-in:**
+  - optional two-factor codes, and your password again for sensitive changes
+  - growing delays instead of lockouts, and no sign-in over plain HTTP from public addresses
+  - `AUTH_DISABLED` removed
+  - a security activity log that also goes to ntfy
+- **Hardening:**
+  - everything remote servers send is escaped, and pages only run Monitorr's own scripts
+  - protection against cross-site requests and clickjacking
+  - sessions can be revoked, and login floods are limited
+  - files are private, and packages and images are pinned
 - **Sandbox** (`docker-compose.dev.yml`) for trying changes before they reach your server.
