@@ -181,6 +181,7 @@ body.can-logs .cv canvas{cursor:pointer}
 
 /* tables */
 .tw{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.gproc{margin-top:12px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{font-weight:500;color:var(--muted);font-size:12px;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line2);white-space:nowrap}
 th.n,td.n{text-align:right}
@@ -313,6 +314,13 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
     <section id="gpu" hidden>
       <div class="sh"><h2 data-i18n>GPU</h2><span class="note" id="gpu-note"></span></div>
       <div class="grid" id="g-gpu"></div>
+      <div class="tw gproc" id="gpu-procs" hidden>
+        <table>
+          <thead><tr><th data-i18n>Process</th><th class="n">PID</th><th data-i18n>GPU</th><th data-i18n>Type</th>
+            <th class="n" data-i18n>Shader</th><th class="n" data-i18n>Encoder</th><th class="n" data-i18n>Decoder</th><th class="n" data-i18n>Memory</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
 
     <section id="containers">
@@ -698,8 +706,9 @@ function ensureCharts() {
     built.gpu.add(m[1]);
     $('#gpu').hidden = false; $('#nav-gpu').hidden = false;
     const g = (lastState?.gpus || []).find(x => x.id === m[1]);
-    new Chart($('#g-gpu'), {title: g ? g.name : m[1], sub: t('busy time and video memory'), max: 100, fmt: fmtPct, axis: v => v + '%', dims: [
-      {key: k, name: t('busy'), color: COL.teal}, {key: `gpu:${m[1]}:mem`, name: t('memory'), color: COL.violet}]});
+    const dims = [{key: k, name: t('shader'), color: COL.teal}, {key: `gpu:${m[1]}:mem`, name: t('memory'), color: COL.violet}];
+    if (S.v.has(`gpu:${m[1]}:enc`)) dims.push({key: `gpu:${m[1]}:enc`, name: t('encoder'), color: COL.amber}, {key: `gpu:${m[1]}:dec`, name: t('decoder'), color: COL.sky});
+    new Chart($('#g-gpu'), {title: g ? g.name : m[1], max: 100, fmt: fmtPct, axis: v => v + '%', dims});
   }
   const cKeys = keys.filter(k => /^ctr:.+:cpu$/.test(k)).map(k => k.slice(4, -4)).sort();
   if (cKeys.length) {
@@ -770,6 +779,13 @@ function renderGpus(st) {
   const gpus = st.gpus || [];
   if (gpus.length) $('#gpu-note').textContent = gpus.map(g => (gpus.length > 1 ? g.name + ': ' : '') + [g.mem_used != null && g.mem_total ? t('{used} of {total}', {used: fmtBytes(g.mem_used), total: fmtBytes(g.mem_total)}) : '',
     g.power != null ? Math.round(g.power) + ' W' : ''].filter(Boolean).join(' · ')).join('; ');
+  const box = $('#gpu-procs');
+  box.hidden = !gpus.some(g => g.id.startsWith('nvidia'));   // AMD has no per-process view yet
+  if (box.hidden) return;
+  const ps = st.gpu_procs || [], type = {compute: t('Compute'), graphics: t('Graphics'), 'compute+graphics': t('Compute and graphics')};
+  box.querySelector('tbody').innerHTML = ps.length ? ps.map(p => `<tr><td>${esc(p.name)}</td><td class="n sub">${num(p.pid)}</td><td class="sub">${esc(String(p.gpu).replace('nvidia', ''))}</td><td class="sub">${esc(type[p.type] || t('Other'))}</td>
+    <td class="n"><span class="mini"><i style="width:${clamp(+p.sm || 0, 0, 100)}%"></i></span>${fmtPct(p.sm)}</td><td class="n">${fmtPct(p.enc)}</td><td class="n">${fmtPct(p.dec)}</td><td class="n">${p.mem != null ? fmtBytes(p.mem) : '–'}</td></tr>`).join('')
+    : `<tr><td colspan="8" class="empty">${esc(t('No process is using the GPU right now.'))}</td></tr>`;
 }
 function renderDrives(st) {
   const host = $('#drives'); const drives = st.drives || []; const seen = new Set();
