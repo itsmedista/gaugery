@@ -23,6 +23,9 @@ POLL_SECONDS = 5
 AGENT_PATHS = {"info", "recent", "state", "history", "stream", "summary", "logs", "logstream", "container-action"}
 STREAM_PATHS = {"stream", "logstream"}
 TIMEOUT = httpx.Timeout(8, connect=4)
+# Biggest real answer is a few MB ("recent" on a many-core server). A hacked agent must not be able
+# to fill the hub's memory, so anything larger is refused. Counted after decompression.
+MAX_REPLY = 32 * 2**20
 
 
 class AgentError(Exception):
@@ -197,9 +200,21 @@ class Remotes:
                 "No Monitorr agent answered at this address" if r.status_code == 404
                 else f"The agent answered {r.status_code}"))
 
+    @staticmethod
+    async def _read_capped(r):
+        """The whole body, as a normal response, or AgentError past MAX_REPLY."""
+        body = bytearray()
+        async for chunk in r.aiter_bytes():
+            body += chunk
+            if len(body) > MAX_REPLY:
+                raise AgentError(f"The agent sent more than {MAX_REPLY >> 20} MB, so Monitorr stopped reading")
+        headers = {k: v for k, v in r.headers.items() if k.lower() not in ("content-encoding", "content-length", "transfer-encoding")}
+        return httpx.Response(r.status_code, headers=headers, content=bytes(body), request=r.request)
+
     async def _send(self, srv, method, path, **kw):
         try:
-            r = await self._client(srv).request(method, f"/api/{path}", headers=self._headers(srv), **kw)
+            async with self._client(srv).stream(method, f"/api/{path}", headers=self._headers(srv), **kw) as resp:
+                r = await self._read_capped(resp)
         except httpx.HTTPError as e:
             if "CERTIFICATE_VERIFY_FAILED" in str(e):  # not the certificate it was paired with
                 raise AgentError(f"{srv['name'] or 'The agent'} presented a different certificate than when it "
@@ -233,9 +248,11 @@ class Remotes:
         except httpx.HTTPError as e:
             raise AgentError(f"Can't reach {srv['name'] or 'this server'} ({type(e).__name__})") from None
         if resp.status_code != 200:
-            await resp.aread()
-            await resp.aclose()
-            self._check(resp)
+            try:
+                err = await self._read_capped(resp)
+            finally:
+                await resp.aclose()
+            self._check(err)
         return resp
 
     # ---------- background polling ----------

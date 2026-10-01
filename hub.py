@@ -300,6 +300,8 @@ def create_app():
     @app.post("/api/2fa/start")
     def api_2fa_start(request: Request):
         need_recent(request)
+        if hub.get("totp_secret"):  # moving to a new phone goes through "Turn off", which needs a current code
+            raise HTTPException(409, "Two-factor sign-in is already on. Turn it off first to set up another app.")
         secret = totp_secret()
         hub.set("totp_pending", secret)
         return {"secret": secret, "uri": totp_uri(secret, auth.user)}
@@ -307,6 +309,8 @@ def create_app():
     @app.post("/api/2fa/confirm")
     async def api_2fa_confirm(request: Request):
         need_recent(request)
+        if hub.get("totp_secret"):
+            raise HTTPException(409, "Two-factor sign-in is already on")
         pending = hub.get("totp_pending")
         step = totp_match(pending, (await read_json(request)).get("code"))
         if not pending or step is None:
