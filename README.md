@@ -255,6 +255,8 @@ with the address `https://monitorr-agent:8088` and the pairing code from
   encoder and decoder, power draw, and which processes use the GPU
 - Docker containers: state, CPU, memory, restarts, health checks
 - Top processes by CPU and memory
+- Hardware: system and board, BIOS, processor (cores, cache, top speed, virtualization),
+  memory modules per slot, disks, GPUs
 
 ## Notes
 
@@ -266,6 +268,18 @@ with the address `https://monitorr-agent:8088` and the pairing code from
 ## What's changed
 
 Newest first. Each entry links to its pull request, which has the details and test results.
+
+### Hardware section ([#10](https://github.com/itsmedista/server-monitor/pull/10))
+- A Hardware section at the end of each server's page (last item in the side menu):
+  - System: manufacturer, model, motherboard, BIOS, platform, OS and kernel.
+  - Processor: sockets, cores and threads, top speed, cache, virtualization, instruction sets.
+  - Memory: modules per slot (size, type, speed, maker, part number).
+  - Storage: disks with model, type and size.
+  - Graphics: GPUs with their video memory.
+- Read once when the agent starts. Serial numbers are never collected. Placeholder values
+  from the firmware ("To Be Filled By O.E.M.") are hidden.
+- Memory modules come from the firmware's table, which virtual machines and some boards
+  don't provide; the page says so instead.
 
 ### Charts use the full width ([#9](https://github.com/itsmedista/server-monitor/pull/9))
 - On the server page every row of charts now fills the page: a lone chart (one GPU, one
