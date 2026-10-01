@@ -369,7 +369,8 @@ class SmartWatcher(threading.Thread):
             time.sleep(self.interval)
 
 
-NVIDIA_QUERY = "index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw"
+NVIDIA_QUERY = ("index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,"
+                "utilization.encoder,utilization.decoder")
 
 
 def _f(v):
@@ -384,14 +385,39 @@ def parse_nvidia(text):
     out = []
     for line in text.splitlines():
         p = [x.strip() for x in line.split(",")]
-        if len(p) != 7:
+        if len(p) != 9:
             continue
         used, total = _f(p[3]), _f(p[4])
         out.append({"id": f"nvidia{p[0]}", "name": p[1][:100], "util": _f(p[2]),
                     "mem_used": used * 2**20 if used is not None else None,
                     "mem_total": total * 2**20 if total is not None else None,
-                    "temp": _f(p[5]), "power": _f(p[6])})
+                    "temp": _f(p[5]), "power": _f(p[6]), "enc": _f(p[7]), "dec": _f(p[8])})
     return out
+
+
+PROC_TYPES = {"C": "compute", "G": "graphics", "C+G": "compute+graphics"}
+
+
+def parse_pmon(text):
+    """nvidia-smi pmon -c 1 -s um -> processes on NVIDIA GPUs. Columns are read from the header,
+    since newer drivers add some (jpg, ofa, ccpm); idle GPUs print a row of dashes."""
+    cols, out = None, []
+    for line in text.splitlines():
+        if line.startswith("# gpu"):
+            cols = line[1:].split()
+            continue
+        if line.startswith("#") or not cols:
+            continue
+        p = line.split(None, len(cols) - 1)
+        if len(p) != len(cols) or not p[1].isdigit():
+            continue
+        r = dict(zip(cols, p))
+        fb = _f(r.get("fb"))
+        out.append({"gpu": f"nvidia{r['gpu']}", "pid": int(r["pid"]), "type": PROC_TYPES.get(r.get("type"), "other"),
+                    "name": r.get("command", "").strip()[:100], "sm": _f(r.get("sm")),
+                    "enc": _f(r.get("enc")), "dec": _f(r.get("dec")), "mem": fb * 2**20 if fb is not None else None})
+    out.sort(key=lambda x: (-(x["sm"] or 0), -(x["mem"] or 0)))
+    return out[:50]
 
 
 def _read(path):
@@ -429,22 +455,25 @@ class GpuWatcher(threading.Thread):
         super().__init__(daemon=True)
         self.interval = interval
         self.smi = shutil.which("nvidia-smi")
-        self.gpus = []
+        self.gpus, self.procs = [], []
+
+    def _smi(self, *args):
+        try:
+            return subprocess.run([self.smi, *args], capture_output=True, text=True, timeout=10).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
 
     def poll(self):
-        gpus = []
+        gpus, procs = [], []
         if self.smi:
-            try:
-                p = subprocess.run([self.smi, f"--query-gpu={NVIDIA_QUERY}", "--format=csv,noheader,nounits"],
-                                   capture_output=True, text=True, timeout=10)
-                gpus += parse_nvidia(p.stdout)
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-        return gpus + amd_gpus()
+            gpus = parse_nvidia(self._smi(f"--query-gpu={NVIDIA_QUERY}", "--format=csv,noheader,nounits"))
+            # needs the host's process list (pid: host in Docker); on WSL/Windows it is always empty
+            procs = parse_pmon(self._smi("pmon", "-c", "1", "-s", "um")) if gpus else []
+        return gpus + amd_gpus(), procs
 
     def run(self):
         while True:
-            self.gpus = self.poll()
+            self.gpus, self.procs = self.poll()
             if not self.gpus and not self.smi:
                 return  # nothing to watch on this machine; GPUs don't appear while running
             time.sleep(self.interval)
@@ -663,8 +692,9 @@ class Collector:
         for g in gpus:
             if g["temp"] is not None:  # NVIDIA's driver has no hwmon sensor; AMD's is already in temps
                 temps[f"GPU {g['id'][6:]}" if len(gpus) > 1 else "GPU"] = g["temp"]
-            if g["util"] is not None:
-                s[f"gpu:{g['id']}:util"] = g["util"]
+            for k in ("util", "enc", "dec"):
+                if g.get(k) is not None:
+                    s[f"gpu:{g['id']}:{k}"] = g[k]
             if g["mem_used"] is not None and g["mem_total"]:
                 s[f"gpu:{g['id']}:mem"] = 100 * g["mem_used"] / g["mem_total"]
         for k, v in temps.items():
@@ -697,5 +727,6 @@ class Collector:
             "process_count": nprocs,
             "temps": temps,
             "gpus": gpus,
+            "gpu_procs": self.gpu.procs,
         }
         return s, state

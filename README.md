@@ -251,7 +251,8 @@ with the address `https://monitorr-agent:8088` and the pairing code from
 - Every mounted drive, found automatically: space, inodes, read/write speed,
   SMART health (opt-in), and a "full in N days" forecast from the last week of growth
 - Network traffic per interface, temperatures
-- GPUs (NVIDIA and AMD): busy time, video memory, temperature, power draw (NVIDIA)
+- GPUs (NVIDIA and AMD): shader load, video memory, temperature; on NVIDIA also the video
+  encoder and decoder, power draw, and which processes use the GPU
 - Docker containers: state, CPU, memory, restarts, health checks
 - Top processes by CPU and memory
 
@@ -265,6 +266,13 @@ with the address `https://monitorr-agent:8088` and the pairing code from
 ## What's changed
 
 Newest first. Each entry links to its pull request, which has the details and test results.
+
+### GPU processes, encoder and decoder ([#8](https://github.com/itsmedista/server-monitor/pull/8))
+- NVIDIA: each GPU's chart also shows the video encoder and decoder, and a table lists the
+  processes using the GPUs (shader, encoder, decoder and memory per process).
+- The process list needs the agent to see the host's processes, which the Docker setup
+  already does. Windows/WSL hosts don't report GPU processes, so the table stays empty there.
+- "busy" on GPU charts is now called "shader".
 
 ### GPU monitoring ([#7](https://github.com/itsmedista/server-monitor/pull/7))
 - A GPU section on the server page, shown only when the server has one: busy time and video
