@@ -267,6 +267,10 @@ with the address `https://monitorr-agent:8088` and the pairing code from
 
 Newest first. Each entry links to its pull request, which has the details and test results.
 
+### Charts use the full width ([#9](https://github.com/itsmedista/server-monitor/pull/9))
+- On the server page every row of charts now fills the page: a lone chart (one GPU, one
+  network interface) or the last chart of a row stretches instead of leaving a gap.
+
 ### GPU processes, encoder and decoder ([#8](https://github.com/itsmedista/server-monitor/pull/8))
 - NVIDIA: each GPU's chart also shows the video encoder and decoder, and a table lists the
   processes using the GPUs (shader, encoder, decoder and memory per process).
