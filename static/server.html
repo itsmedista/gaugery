@@ -132,6 +132,7 @@ body.can-logs .cv canvas{cursor:pointer}
 .ch{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:4px}
 .ct{font-size:13px;font-weight:500;white-space:nowrap}
 .ct small{color:var(--faint);font-size:11.5px;font-weight:400;margin-left:7px}
+@media (max-width:640px){.ct{white-space:normal}.ct small{display:block;margin-left:0}}
 .lg{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:2px 4px;font-size:12px}
 .lg button{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:2px 6px;border-radius:5px;cursor:pointer;color:var(--muted)}
 .lg button:hover{background:var(--panel2)}
@@ -262,6 +263,7 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
     <a data-i18n href="#storage"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>Storage<span class="badge" id="b-storage" hidden></span></a>
     <a data-i18n href="#network"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 2.5v10M2.5 10 5 12.5 7.5 10M11 13.5v-10M8.5 6 11 3.5 13.5 6"/></svg>Network</a>
     <a data-i18n href="#sensors" id="nav-sensors" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 9.3V3a1.5 1.5 0 0 1 3 0v6.3a3 3 0 1 1-3 0Z"/></svg>Sensors</a>
+    <a data-i18n href="#gpu" id="nav-gpu" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="4" width="13" height="8" rx="1"/><circle cx="10" cy="8" r="2"/><path d="M4 6.5v3M3.5 12v1.5M6.5 12v1.5"/></svg>GPU</a>
     <a data-i18n href="#containers"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m8 1.8 5.5 3v6.4L8 14.2l-5.5-3V4.8Z"/><path d="M2.7 4.9 8 7.8l5.3-2.9M8 7.8v6.3"/></svg>Containers<span class="badge" id="b-ctr" hidden></span></a>
     <a data-i18n href="#logs" id="nav-logs" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3.5h10M3 6.5h10M3 9.5h7M3 12.5h5"/></svg>Logs</a>
     <a data-i18n href="#processes"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg>Processes</a>
@@ -306,6 +308,11 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
     <section id="sensors" hidden>
       <div class="sh"><h2 data-i18n>Sensors</h2></div>
       <div class="grid" id="g-temp"></div>
+    </section>
+
+    <section id="gpu" hidden>
+      <div class="sh"><h2 data-i18n>GPU</h2><span class="note" id="gpu-note"></span></div>
+      <div class="grid" id="g-gpu"></div>
     </section>
 
     <section id="containers">
@@ -639,7 +646,7 @@ let info = null, mode = 'server', demo = null, lastS = {}, lastState = null, pro
 let svc = {checks: [], alerts: []};  // service checks for this server (run by the hub)
 const openDrives = new Set();
 const driveRows = new Map();
-const built = {base: false, net: new Set(), disk: new Set(), util: null, temp: null, ctrCpu: null, ctrMem: null, keys: 0};
+const built = {base: false, net: new Set(), disk: new Set(), gpu: new Set(), util: null, temp: null, ctrCpu: null, ctrMem: null, keys: 0};
 
 function ensureCharts() {
   if (!built.base) {
@@ -684,6 +691,15 @@ function ensureCharts() {
     const dims = tempKeys.map((k, i) => ({key: k, name: k.slice(5), color: PAL[i % PAL.length]}));
     if (!built.temp) built.temp = new Chart($('#g-temp'), {title: t('Temperatures'), wide: true, h: 170, autoMin: true, fmt: fmtTemp, axis: v => Math.round(Monitorr.temp(v)) + '°', dims});
     else if (built.temp.cfg.dims.length !== dims.length) built.temp.setDims(dims);
+  }
+  for (const k of keys) {
+    const m = k.match(/^gpu:(.+):util$/);
+    if (!m || built.gpu.has(m[1])) continue;
+    built.gpu.add(m[1]);
+    $('#gpu').hidden = false; $('#nav-gpu').hidden = false;
+    const g = (lastState?.gpus || []).find(x => x.id === m[1]);
+    new Chart($('#g-gpu'), {title: g ? g.name : m[1], sub: t('busy time and video memory'), max: 100, fmt: fmtPct, axis: v => v + '%', dims: [
+      {key: k, name: t('busy'), color: COL.teal}, {key: `gpu:${m[1]}:mem`, name: t('memory'), color: COL.violet}]});
   }
   const cKeys = keys.filter(k => /^ctr:.+:cpu$/.test(k)).map(k => k.slice(4, -4)).sort();
   if (cKeys.length) {
@@ -749,6 +765,11 @@ function foreText(d) {
   if (x < 1) return `<span class="hl-crit">${esc(t('Full within a day'))}</span>`;
   if (x > 365) return esc(t('Over a year'));
   return `<span class="${x < 14 ? 'hl-crit' : x < 45 ? 'hl-warn' : ''}">${esc(t('About {n} days', {n: Math.round(x)}))}</span>`;
+}
+function renderGpus(st) {
+  const gpus = st.gpus || [];
+  if (gpus.length) $('#gpu-note').textContent = gpus.map(g => (gpus.length > 1 ? g.name + ': ' : '') + [g.mem_used != null && g.mem_total ? t('{used} of {total}', {used: fmtBytes(g.mem_used), total: fmtBytes(g.mem_total)}) : '',
+    g.power != null ? Math.round(g.power) + ' W' : ''].filter(Boolean).join(' · ')).join('; ');
 }
 function renderDrives(st) {
   const host = $('#drives'); const drives = st.drives || []; const seen = new Set();
@@ -852,7 +873,7 @@ function onSample(m) {
   if (view.paused) return;
   ensureCharts();
   renderGauges(m.s, m.state); renderCores(m.s);
-  if (m.state) { renderDrives(m.state); renderContainers(m.state); renderProcs(m.state); renderAlerts(m.state); }
+  if (m.state) { renderGpus(m.state); renderDrives(m.state); renderContainers(m.state); renderProcs(m.state); renderAlerts(m.state); }
   const up = $('#uptime'); if (up && m.state?.uptime) up.textContent = fmtDur(m.state.uptime);
   requestDraw();
 }

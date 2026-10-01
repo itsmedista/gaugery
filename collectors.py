@@ -369,6 +369,87 @@ class SmartWatcher(threading.Thread):
             time.sleep(self.interval)
 
 
+NVIDIA_QUERY = "index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw"
+
+
+def _f(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None  # nvidia-smi prints "[N/A]" or "[Not Supported]" for missing readings
+
+
+def parse_nvidia(text):
+    """nvidia-smi --query-gpu=NVIDIA_QUERY --format=csv,noheader,nounits -> list of GPU dicts."""
+    out = []
+    for line in text.splitlines():
+        p = [x.strip() for x in line.split(",")]
+        if len(p) != 7:
+            continue
+        used, total = _f(p[3]), _f(p[4])
+        out.append({"id": f"nvidia{p[0]}", "name": p[1][:100], "util": _f(p[2]),
+                    "mem_used": used * 2**20 if used is not None else None,
+                    "mem_total": total * 2**20 if total is not None else None,
+                    "temp": _f(p[5]), "power": _f(p[6])})
+    return out
+
+
+def _read(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def amd_gpus(root="/sys/class/drm"):
+    """AMD cards through the amdgpu driver's sysfs files (temperature already comes from hwmon)."""
+    out = []
+    try:
+        cards = sorted(c for c in os.listdir(root) if c.startswith("card") and c[4:].isdigit())
+    except OSError:
+        return out
+    for c in cards:
+        dev = f"{root}/{c}/device"
+        busy = _f(_read(f"{dev}/gpu_busy_percent"))
+        if busy is None:
+            continue  # not amdgpu
+        out.append({"id": f"amd{c[4:]}", "name": f"AMD GPU {c[4:]}", "util": busy,
+                    "mem_used": _f(_read(f"{dev}/mem_info_vram_used")),
+                    "mem_total": _f(_read(f"{dev}/mem_info_vram_total")), "temp": None, "power": None})
+    return out
+
+
+class GpuWatcher(threading.Thread):
+    """Reads NVIDIA (nvidia-smi) and AMD (sysfs) GPUs every few seconds, off the main sampler,
+    because nvidia-smi can take a few hundred milliseconds.
+    ponytail: no Intel; its busy counters need perf/root access (intel_gpu_top). Add if asked."""
+
+    def __init__(self, interval=5):
+        super().__init__(daemon=True)
+        self.interval = interval
+        self.smi = shutil.which("nvidia-smi")
+        self.gpus = []
+
+    def poll(self):
+        gpus = []
+        if self.smi:
+            try:
+                p = subprocess.run([self.smi, f"--query-gpu={NVIDIA_QUERY}", "--format=csv,noheader,nounits"],
+                                   capture_output=True, text=True, timeout=10)
+                gpus += parse_nvidia(p.stdout)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        return gpus + amd_gpus()
+
+    def run(self):
+        while True:
+            self.gpus = self.poll()
+            if not self.gpus and not self.smi:
+                return  # nothing to watch on this machine; GPUs don't appear while running
+            time.sleep(self.interval)
+
+
 class _Nic:
     __slots__ = ("bytes_recv", "bytes_sent")
 
@@ -402,11 +483,13 @@ class Collector:
         self._hung = {}  # mountpoint -> future still stuck on a dead mount
         self.docker = DockerWatcher()
         self.smart = SmartWatcher()
+        self.gpu = GpuWatcher()
         self.cores = psutil.cpu_count() or 1
 
     def start(self):
         self.docker.start()
         self.smart.start()
+        self.gpu.start()
         psutil.cpu_times_percent(interval=None)
         psutil.cpu_percent(percpu=True)
         self._rates(time.time(), prime=True)
@@ -576,6 +659,14 @@ class Collector:
 
         s.update(self._rates(now))
         temps = self._temps()
+        gpus = self.gpu.gpus
+        for g in gpus:
+            if g["temp"] is not None:  # NVIDIA's driver has no hwmon sensor; AMD's is already in temps
+                temps[f"GPU {g['id'][6:]}" if len(gpus) > 1 else "GPU"] = g["temp"]
+            if g["util"] is not None:
+                s[f"gpu:{g['id']}:util"] = g["util"]
+            if g["mem_used"] is not None and g["mem_total"]:
+                s[f"gpu:{g['id']}:mem"] = 100 * g["mem_used"] / g["mem_total"]
         for k, v in temps.items():
             s[f"temp:{k}"] = v
 
@@ -605,5 +696,6 @@ class Collector:
             "processes": procs,
             "process_count": nprocs,
             "temps": temps,
+            "gpus": gpus,
         }
         return s, state

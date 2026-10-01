@@ -1,0 +1,17 @@
+# NVIDIA GPUs. Needs the NVIDIA Container Toolkit on the host, which hands the agent the host's
+# nvidia-smi read-only. Start with:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# (or with docker-compose.agent.yml on an agent-only server)
+#
+# AMD GPUs need nothing: their counters are in /sys, which the agent already reads.
+services:
+  monitorr-agent:
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: utility   # nvidia-smi only, no CUDA or video
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
