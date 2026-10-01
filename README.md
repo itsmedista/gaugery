@@ -269,6 +269,17 @@ with the address `https://monitorr-agent:8088` and the pairing code from
 
 Newest first. Each entry links to its pull request, which has the details and test results.
 
+### Security review of #4 to #10 ([#11](https://github.com/itsmedista/server-monitor/pull/11))
+- The web interface stops reading an agent's answer past 32 MB (counted after
+  decompression). Before, a hacked remote server could send an endless answer and run the
+  web interface out of memory, taking monitoring down for every server.
+- With two-factor sign-in on, setting up another authenticator app is refused until it's
+  turned off, which needs a current code. Before, the setup steps could replace the app with
+  only the password.
+- Checked and unchanged: everything a server reports (GPU and process names, hardware
+  strings) is escaped on the page; account endpoints validate their input; no known
+  vulnerabilities in the locked Python packages (pip-audit).
+
 ### Hardware section ([#10](https://github.com/itsmedista/server-monitor/pull/10))
 - A Hardware section at the end of each server's page (last item in the side menu):
   - System: manufacturer, model, motherboard, BIOS, platform, OS and kernel.
