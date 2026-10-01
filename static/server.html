@@ -180,6 +180,15 @@ body.can-logs .cv canvas{cursor:pointer}
 .dexp .chart{background:var(--bg)}
 .dstatus{color:var(--crit);font-size:12.5px}
 
+/* hardware */
+.hwc{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.hwc h3{margin:0 0 10px;font-size:13px;font-weight:500}
+.hwc dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:7px 18px;margin:0;font-size:13px}
+.hwc dt{color:var(--muted)} .hwc dd{margin:0;overflow-wrap:anywhere}
+.hwc .tw{margin-top:12px;border-color:var(--line)}
+.hwc .none{color:var(--faint);font-size:12px;margin-top:10px}
+.grid>.hwc.wide{flex-basis:100%}
+
 /* tables */
 .tw{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
 .gproc{margin-top:12px}
@@ -269,6 +278,7 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
     <a data-i18n href="#logs" id="nav-logs" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3.5h10M3 6.5h10M3 9.5h7M3 12.5h5"/></svg>Logs</a>
     <a data-i18n href="#processes"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg>Processes</a>
     <a data-i18n href="#alerts"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2a4 4 0 0 1 4 4v3l1.5 2.5h-11L4 9V6a4 4 0 0 1 4-4ZM6.5 13.5a1.6 1.6 0 0 0 3 0"/></svg>Alerts<span class="badge" id="b-alerts" hidden></span></a>
+    <a data-i18n href="#hardware"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><rect x="5.5" y="5.5" width="5" height="5" rx=".5"/><path d="M5.5 .8v1.7M10.5 .8v1.7M5.5 13.5v1.7M10.5 13.5v1.7M.8 5.5h1.7M.8 10.5h1.7M13.5 5.5h1.7M13.5 10.5h1.7"/></svg>Hardware</a>
     <div class="facts" id="facts"></div>
   </nav>
 
@@ -358,6 +368,11 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
       <div class="tw" style="margin-top:10px">
         <table class="log"><thead><tr><th data-i18n>When</th><th data-i18n>Event</th><th data-i18n>Alert</th><th data-i18n>Details</th></tr></thead><tbody id="alog"></tbody></table>
       </div>
+    </section>
+
+    <section id="hardware">
+      <div class="sh"><h2 data-i18n>Hardware</h2><span class="note" data-i18n>Read when the agent starts</span></div>
+      <div class="grid" id="hw"></div>
     </section>
   </main>
 </div>
@@ -777,6 +792,7 @@ function foreText(d) {
 }
 function renderGpus(st) {
   const gpus = st.gpus || [];
+  if (gpus.length && !$('#hw-gpu')) renderHardware();
   if (gpus.length) $('#gpu-note').textContent = gpus.map(g => (gpus.length > 1 ? g.name + ': ' : '') + [g.mem_used != null && g.mem_total ? t('{used} of {total}', {used: fmtBytes(g.mem_used), total: fmtBytes(g.mem_total)}) : '',
     g.power != null ? Math.round(g.power) + ' W' : ''].filter(Boolean).join(' · ')).join('; ');
   const box = $('#gpu-procs');
@@ -786,6 +802,41 @@ function renderGpus(st) {
   box.querySelector('tbody').innerHTML = ps.length ? ps.map(p => `<tr><td>${esc(p.name)}</td><td class="n sub">${num(p.pid)}</td><td class="sub">${esc(String(p.gpu).replace('nvidia', ''))}</td><td class="sub">${esc(type[p.type] || t('Other'))}</td>
     <td class="n"><span class="mini"><i style="width:${clamp(+p.sm || 0, 0, 100)}%"></i></span>${fmtPct(p.sm)}</td><td class="n">${fmtPct(p.enc)}</td><td class="n">${fmtPct(p.dec)}</td><td class="n">${p.mem != null ? fmtBytes(p.mem) : '–'}</td></tr>`).join('')
     : `<tr><td colspan="8" class="empty">${esc(t('No process is using the GPU right now.'))}</td></tr>`;
+}
+// Firmware fills unset fields with placeholders like "To Be Filled By O.E.M."; those are left out.
+const JUNK = /^(to be filled.*|default string|not specified|not applicable|system (product name|version|manufacturer)|o\.?e\.?m\.?|none|unknown|0x0+|n\/a)$/i;
+function hwCard(title, rows, extra = '', cls = '', id = '') {
+  const dl = rows.filter(([, v]) => v != null && v !== '' && !JUNK.test(String(v).trim()))
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+  return `<div class="hwc ${cls}"${id ? ` id="${id}"` : ''}><h3>${esc(title)}</h3>${dl ? `<dl>${dl}</dl>` : ''}${extra}</div>`;
+}
+function hwTable(head, rows) {
+  return `<div class="tw"><table><thead><tr>${head.map(([h, n]) => `<th${n ? ' class="n"' : ''}>${esc(h)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr>${r.map((c, i) => `<td${head[i][1] ? ' class="n"' : ''}>${esc(c ?? '–')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function renderHardware() {
+  const hw = info.hardware || {}, sys = hw.system || {}, cpu = hw.cpu || {}, dimms = hw.dimms || [], disks = hw.disks || [];
+  const used = dimms.filter(d => d.size), gpus = lastState?.gpus || [];
+  const mhz = v => v ? (v >= 1000 ? (v / 1000).toFixed(2) + ' GHz' : v + ' MHz') : null;
+  const cards = [
+    hwCard(t('System'), [[t('Manufacturer'), sys.vendor], [t('Model'), sys.model], [t('Version'), sys.version], [t('Motherboard'), sys.board],
+      ['BIOS', [sys.bios, sys.bios_date].filter(Boolean).join(', ')], [t('Platform'), t(VIRT[info.virt] || info.virt)], [t('Architecture'), info.arch],
+      [t('Operating system'), info.os], [t('Kernel'), info.kernel]]),
+    hwCard(t('Processor'), [[t('Model'), info.cpu_model], [t('Sockets'), cpu.sockets],
+      [t('Cores'), info.physical_cores ? t('{c} cores, {n} threads', {c: info.physical_cores, n: info.cores}) : t('{n} threads', {n: info.cores})],
+      [t('Top speed'), mhz(cpu.max_mhz)], [t('Cache'), (cpu.cache || []).map(([l, b]) => `${l} ${fmtBytes(b)}`).join(' · ')],
+      [t('Virtualization'), cpu.virtualization], [t('Instruction sets'), (cpu.features || []).map(f => f.toUpperCase().replace('_NI', '-NI').replace('512F', '-512')).join(', ')]]),
+    hwCard(t('Memory'), [[t('Installed'), fmtBytes(info.mem_total)], [t('Swap'), fmtBytes(info.swap_total)],
+      [t('Slots'), dimms.length ? t('{used} of {total} in use', {used: used.length, total: dimms.length}) : null]],
+      used.length ? hwTable([[t('Slot')], [t('Size'), 1], [t('Type')], [t('Speed'), 1], [t('Manufacturer')], [t('Part number')]],
+        used.map(d => [d.slot, fmtBytes(d.size), d.type, d.configured && d.configured !== d.speed ? `${d.configured} / ${d.speed} MT/s` : d.speed ? d.speed + ' MT/s' : null, d.maker, d.part]))
+        : `<div class="none">${esc(t("Memory module details aren't available here (virtual machines and some boards don't report them)."))}</div>`,
+      used.length ? 'wide' : ''),
+    hwCard(t('Storage'), [], disks.length ? hwTable([[t('Disk')], [t('Model')], [t('Type')], [t('Size'), 1]],
+      disks.map(d => [d.name, d.model, ({'NVMe SSD': t('NVMe SSD'), HDD: t('HDD'), SSD: t('SSD'), Removable: t('Removable')}[d.kind] || d.kind), fmtBytes(d.size)])) : `<div class="none">${esc(t('No disks found.'))}</div>`),
+  ];
+  if (gpus.length) cards.push(hwCard(t('Graphics'), [], hwTable([[t('GPU')], [t('Video memory'), 1]], gpus.map(g => [g.name, g.mem_total ? fmtBytes(g.mem_total) : null])), '', 'hw-gpu'));
+  $('#hw').innerHTML = cards.join('');
 }
 function renderDrives(st) {
   const host = $('#drives'); const drives = st.drives || []; const seen = new Set();
@@ -878,6 +929,7 @@ function renderInfo() {
   $('#hostsub').textContent = t('{os}, kernel {kernel}', {os: info.os, kernel: info.kernel});
   const facts = [['Processor', info.cpu_model || info.arch], ['Threads', info.physical_cores ? t('{n} on {c} cores', {n: info.cores, c: info.physical_cores}) : String(info.cores)], ['Memory', fmtBytes(info.mem_total)], ['Platform', t(VIRT[info.virt] || info.virt)], ['Up for', `<span id="uptime">${fmtDur(Date.now() / 1000 - info.boot_time)}</span>`]];
   $('#facts').innerHTML = facts.map(([k, v]) => `<div><span>${esc(t(k))}</span><b>${k === 'Up for' ? v : esc(v)}</b></div>`).join('');
+  renderHardware();
   $('#cpu-note').textContent = info.cpu_model || '';
   $('#mem-note').textContent = t('{size} installed', {size: fmtBytes(info.mem_total)});
 }

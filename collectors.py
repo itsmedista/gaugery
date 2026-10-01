@@ -193,6 +193,7 @@ def host_info():
         "swap_total": psutil.swap_memory().total,
         "boot_time": psutil.boot_time(),
         "virt": virt,
+        "hardware": hardware(),
     }
 
 
@@ -477,6 +478,100 @@ class GpuWatcher(threading.Thread):
             if not self.gpus and not self.smi:
                 return  # nothing to watch on this machine; GPUs don't appear while running
             time.sleep(self.interval)
+
+
+MEM_TYPES = {0x12: "DDR", 0x13: "DDR2", 0x18: "DDR3", 0x1A: "DDR4", 0x1B: "LPDDR", 0x1C: "LPDDR2",
+             0x1D: "LPDDR3", 0x1E: "LPDDR4", 0x20: "HBM", 0x21: "HBM2", 0x22: "DDR5", 0x23: "LPDDR5"}
+
+
+def parse_dimms(raw):
+    """Memory modules (SMBIOS type 17) from the raw DMI table. Serial numbers are left out on purpose."""
+    out, i = [], 0
+    while i + 4 <= len(raw):
+        typ, ln = raw[i], raw[i + 1]
+        if ln < 4 or typ == 127:  # 127 = end of table
+            break
+        end = raw.find(b"\0\0", i + ln)
+        if end < 0:
+            break
+        strings = raw[i + ln:end].split(b"\0")
+        if typ == 17 and ln >= 0x1B:
+            f = raw[i:i + ln]
+            word = lambda o: int.from_bytes(f[o:o + 2], "little") if o + 2 <= ln else 0
+            s = lambda o: (strings[f[o] - 1].decode("ascii", "replace").strip()[:60]
+                           if o < ln and 0 < f[o] <= len(strings) else "")
+            size = word(0x0C)
+            if size == 0x7FFF and ln >= 0x20:
+                size = int.from_bytes(f[0x1C:0x20], "little") * 2**20
+            elif size in (0, 0xFFFF):
+                size = 0
+            else:
+                size = (size & 0x7FFF) * (2**10 if size & 0x8000 else 2**20)
+            out.append({"slot": s(0x10) or s(0x11), "size": size, "type": MEM_TYPES.get(f[0x12], ""),
+                        "speed": word(0x15) or None, "configured": word(0x20) or None,
+                        "maker": s(0x17), "part": s(0x1A)})
+        i = end + 2
+    return out[:64]
+
+
+def _dmi_table():
+    # Docker hides /sys/firmware, but the host's copy is visible under HOST_ROOT (root only)
+    for p in ("/sys/firmware/dmi/tables/DMI", HOST_ROOT + "/sys/firmware/dmi/tables/DMI" if HOST_ROOT else ""):
+        try:
+            with open(p, "rb") as f:
+                return f.read()
+        except OSError:
+            continue
+    return b""
+
+
+def hardware():
+    """Everything that doesn't change while running: board, CPU, memory modules, disks.
+    Read once at start. ponytail: no PCI/NIC list; the agent's network view is its container's."""
+    dmi = lambda n: (_read(f"/sys/class/dmi/id/{n}") or "").strip()
+    system = {"vendor": dmi("sys_vendor"), "model": dmi("product_name"), "version": dmi("product_version"),
+              "board": " ".join(x for x in (dmi("board_vendor"), dmi("board_name")) if x),
+              "bios": " ".join(x for x in (dmi("bios_vendor"), dmi("bios_version")) if x), "bios_date": dmi("bios_date")}
+    sockets, flags = set(), ""
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("physical id"):
+                    sockets.add(line.split(":", 1)[1].strip())
+                elif line.startswith(("flags", "Features")) and not flags:
+                    flags = line.split(":", 1)[1]
+    except OSError:
+        pass
+    caches = []
+    base = "/sys/devices/system/cpu/cpu0/cache"
+    try:
+        for idx in sorted(os.listdir(base)):
+            lvl, typ, size = (_read(f"{base}/{idx}/{k}") for k in ("level", "type", "size"))
+            if lvl and size and size[:-1].isdigit():
+                mult = {"K": 2**10, "M": 2**20}.get(size[-1], 0)
+                caches.append([f"L{lvl}{'d' if typ == 'Data' else 'i' if typ == 'Instruction' else ''}", int(size[:-1]) * mult])
+    except OSError:
+        pass
+    try:
+        freq = psutil.cpu_freq()
+    except Exception:  # noqa: BLE001
+        freq = None
+    fl = set(flags.split())
+    cpu = {"sockets": len(sockets) or 1, "max_mhz": round(freq.max) if freq and freq.max else None,
+           "cache": caches, "virtualization": "VT-x" if "vmx" in fl else "AMD-V" if "svm" in fl else "",
+           "features": [x for x in ("avx2", "avx512f", "aes", "sha_ni") if x in fl]}
+    disks = []
+    for d in whole_disks():
+        sysp = f"/sys/block/{d}"
+        sectors = _f(_read(f"{sysp}/size"))
+        if not sectors:
+            continue  # empty card reader, unloaded loop device
+        model = " ".join(x for x in (_read(f"{sysp}/device/vendor"), _read(f"{sysp}/device/model")) if x)
+        kind = ("NVMe SSD" if d.startswith("nvme") else "HDD" if _read(f"{sysp}/queue/rotational") == "1" else "SSD")
+        if _read(f"{sysp}/removable") == "1":
+            kind = "Removable"
+        disks.append({"name": d, "model": model[:80], "size": int(sectors) * 512, "kind": kind})
+    return {"system": system, "cpu": cpu, "dimms": parse_dimms(_dmi_table()), "disks": disks}
 
 
 class _Nic:
