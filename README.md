@@ -36,6 +36,10 @@ option is explained in `.env.example`); apply changes with `docker compose up -d
 - Drive health (SMART) needs raw disk access, so it's opt-in: list your disks in
   `docker-compose.smart.yml` and start with
   `docker compose -f docker-compose.yml -f docker-compose.smart.yml up -d`.
+- NVIDIA GPUs need the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+  on the host; then start with
+  `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`.
+  AMD GPUs work as they are. Without Docker, the agent uses the host's `nvidia-smi`.
 
 **Upgrading from the single-container version:** run `./docker-setup.sh` (it adds the
 agent token to your `.env`), then `docker compose up -d --build --remove-orphans`. On first
@@ -247,6 +251,7 @@ with the address `https://monitorr-agent:8088` and the pairing code from
 - Every mounted drive, found automatically: space, inodes, read/write speed,
   SMART health (opt-in), and a "full in N days" forecast from the last week of growth
 - Network traffic per interface, temperatures
+- GPUs (NVIDIA and AMD): busy time, video memory, temperature, power draw (NVIDIA)
 - Docker containers: state, CPU, memory, restarts, health checks
 - Top processes by CPU and memory
 
@@ -260,6 +265,16 @@ with the address `https://monitorr-agent:8088` and the pairing code from
 ## What's changed
 
 Newest first. Each entry links to its pull request, which has the details and test results.
+
+### GPU monitoring ([#7](https://github.com/itsmedista/server-monitor/pull/7))
+- A GPU section on the server page, shown only when the server has one: busy time and video
+  memory for each GPU, with memory in use and power draw next to the title.
+- NVIDIA through `nvidia-smi`, AMD through the amdgpu driver's files in `/sys`. Intel isn't
+  covered yet.
+- GPU temperatures join the Sensors chart, the "Hottest sensor" gauge and the temperature
+  alerts.
+- Docker: `docker-compose.gpu.yml` gives the agent NVIDIA GPUs (read-only `nvidia-smi`, no
+  CUDA). AMD needs nothing extra.
 
 ### Account menu on every screen size ([#5](https://github.com/itsmedista/server-monitor/pull/5))
 - On phones and tablets the account menu opened behind the dashboard. It now always
