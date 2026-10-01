@@ -126,9 +126,10 @@ body.can-logs .cv canvas{cursor:pointer}
 .al time{color:var(--faint);font-size:12px;white-space:nowrap}
 
 /* charts */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:10px}
+.grid{display:flex;flex-wrap:wrap;gap:10px}
+.grid>*{flex:1 1 440px}
 .chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px 6px;min-width:0}
-.chart.wide{grid-column:1/-1}
+.grid>.chart.wide{flex-basis:100%}
 .ch{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:4px}
 .ct{font-size:13px;font-weight:500;white-space:nowrap}
 .ct small{color:var(--faint);font-size:11.5px;font-weight:400;margin-left:7px}
@@ -220,7 +221,6 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
   .side a.on::before{display:none}
   .facts{display:none}
   main{padding:14px 12px 60px}
-  .grid{grid-template-columns:minmax(0,1fr)}
   .drive>button{grid-template-columns:minmax(0,1fr) 14px;gap:10px}
   .drive .c-use{grid-column:1/-1;grid-row:2}
   .drive .c-smart{display:none}
