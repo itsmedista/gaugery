@@ -6,6 +6,7 @@ agent over a Unix socket; other servers' data from their agents over pinned TLS.
 import asyncio
 import ipaddress
 import json
+import mimetypes
 import os
 import re
 import threading
@@ -37,7 +38,11 @@ ALLOW_HTTP_LOGIN = os.environ.get("ALLOW_HTTP_LOGIN", "").lower() in ("1", "true
 TLS = os.environ.get("TLS", "").lower()                         # "auto": serve HTTPS with its own certificate
 OWN_CERT = bool(os.environ.get("TLS_CERT") and os.environ.get("TLS_KEY"))
 SELF_SIGNED = TLS == "auto" and not OWN_CERT                   # no HSTS then: you must be able to accept the certificate
-PUBLIC = {"/login.html", "/icon.svg", "/api/login", "/api/auth-config", "/healthz"}
+PUBLIC = {"/login.html", "/icon.svg", "/api/login", "/api/auth-config", "/healthz",
+          # what the sign-in page itself loads: static and holding no data
+          "/theme.css", "/fonts.css", "/lang.js", "/i18n.js", "/account.js"}
+FONT_FILE = re.compile(r"/fonts/[\w-]+\.woff2")   # one file name, no "..", no other folder
+mimetypes.add_type("font/woff2", ".woff2")  # slim images lack it; fonts would go out as octet-stream
 # Where signing in over plain HTTP is still allowed: this machine, private networks, Tailscale.
 NEARBY = [ipaddress.ip_network(n) for n in ("127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
                                             "100.64.0.0/10", "::1/128", "fc00::/7", "fe80::/10")]
@@ -187,7 +192,7 @@ def create_app():
     @app.middleware("http")
     async def require_login(request: Request, call_next):
         path = request.url.path
-        if path in PUBLIC or auth.valid(request.cookies.get(COOKIE)):
+        if path in PUBLIC or FONT_FILE.fullmatch(path) or auth.valid(request.cookies.get(COOKIE)):
             return await call_next(request)
         if path.startswith("/api/"):
             return JSONResponse({"detail": "Not signed in"}, status_code=401)
