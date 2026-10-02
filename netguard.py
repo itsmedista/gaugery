@@ -37,7 +37,7 @@ def check_ip(ip, host, limit_to_allowed=True):
         a = a.ipv4_mapped
     if any(a in n for n in BLOCKED):
         where = str(a) if host == str(a) else f"{host} ({a})"
-        raise Blocked(f"Monitorr won't connect to {where}: loopback, link-local and cloud-metadata addresses are off limits")
+        raise Blocked(f"Gaugery won't connect to {where}: loopback, link-local and cloud-metadata addresses are off limits")
     if limit_to_allowed and ALLOWED and not any(a in n for n in ALLOWED):
         raise Blocked(f"{host if host == str(a) else f'{host} ({a})'} is outside CHECK_ALLOWED_NETWORKS")
     return str(a)

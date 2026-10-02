@@ -1,4 +1,4 @@
-"""TLS for Monitorr without a certificate authority.
+"""TLS for Gaugery without a certificate authority.
 
 Each agent makes its own certificate once. The hub learns that certificate's fingerprint from
 the pairing code and from then on trusts exactly that certificate, checked during the TLS
@@ -11,10 +11,11 @@ import hashlib
 import ssl
 from pathlib import Path
 
-PAIRING_PREFIX = "mtr1"
+PAIRING_PREFIX = "gry1"
+OLD_PREFIXES = {"mtr1"}  # codes printed by agents from before the rename to Gaugery
 
 
-def ensure_cert(directory, name="monitorr"):
+def ensure_cert(directory, name="gaugery"):
     """Paths of this machine's certificate and key, created on first use (valid 20 years)."""
     d = Path(directory)
     cert, key = d / "tls-cert.pem", d / "tls-key.pem"
@@ -69,8 +70,8 @@ def pairing_code(cert_path, token):
 def parse_pairing(code):
     """-> (fingerprint bytes, token) or ValueError."""
     parts = (code or "").strip().split(".", 2)
-    if len(parts) != 3 or parts[0] != PAIRING_PREFIX:
-        raise ValueError("That isn't a Monitorr pairing code (it starts with mtr1.)")
+    if len(parts) != 3 or parts[0] not in {PAIRING_PREFIX, *OLD_PREFIXES}:
+        raise ValueError("That isn't a Gaugery pairing code (it starts with gry1.)")
     fp = base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4))
     if len(fp) != 32 or len(parts[2]) < 24:
         raise ValueError("The pairing code is incomplete. Copy the whole line.")

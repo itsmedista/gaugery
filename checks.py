@@ -1,4 +1,4 @@
-"""Service checks for Monitorr: is a website, port, or host actually answering?
+"""Service checks for Gaugery: is a website, port, or host actually answering?
 
 The hub runs every check itself (agents need nothing new) and files each one under a server,
 so a service that's down turns that server's card red and raises a normal alert (and ntfy).
@@ -87,7 +87,7 @@ def validate(body):
 
 
 async def guard_target(kind, target):
-    """CheckError if the check would point somewhere Monitorr must not connect to."""
+    """CheckError if the check would point somewhere Gaugery must not connect to."""
     try:
         if kind == "http":
             u = urlsplit(target)
@@ -118,7 +118,7 @@ class Checks:
         self.engines, self.alerts = {}, {}   # per server: an AlertEngine and its active service alerts
         # redirects are followed by hand, so each hop's destination is checked too
         self._http = {v: httpx.AsyncClient(verify=v, follow_redirects=False,
-                                           headers={"User-Agent": "Monitorr service check"}) for v in (True, False)}
+                                           headers={"User-Agent": "Gaugery service check"}) for v in (True, False)}
         self._pruned = 0.0
 
     @staticmethod
@@ -326,7 +326,7 @@ class Checks:
             p = await asyncio.create_subprocess_exec("ping", "-c", "1", "-W", str(max(1, round(t))), ip,
                                                      stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
         except FileNotFoundError:
-            return False, "ping isn't installed where Monitorr runs", None
+            return False, "ping isn't installed where Gaugery runs", None
         out = (await p.communicate())[0].decode(errors="replace")
         if p.returncode != 0:
             unknown = any(w in out.lower() for w in ("unknown host", "not known", "name resolution", "resolve"))

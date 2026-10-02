@@ -1,4 +1,4 @@
-"""Metric collectors for Monitorr.
+"""Metric collectors for Gaugery.
 
 Collector.sample() returns (series, state):
   series: flat {key: number} used for charts and history
@@ -34,7 +34,7 @@ ALLOW_PREFIXES = ("/run/media",)
 VIRTUAL_NICS = ("lo", "veth", "br-", "docker", "virbr", "vnet", "cali", "flannel", "cni")
 NOT_DISKS = ("loop", "ram", "zram", "sr", "fd", "nbd", "dm-", "md")
 IGNORE_MOUNTS = {m.strip() for m in os.environ.get("IGNORE_MOUNTS", "").split(",") if m.strip()}
-# Docker is reached through a socket proxy that only allows what Monitorr uses (tcp://docker-proxy:2375),
+# Docker is reached through a socket proxy that only allows what Gaugery uses (tcp://docker-proxy:2375),
 # or directly through its socket (unix:///var/run/docker.sock) on a plain systemd install.
 DOCKER_HOST = os.environ.get("DOCKER_HOST") or "unix://" + os.environ.get("DOCKER_SOCK", "/var/run/docker.sock")
 # Drive health needs raw disk access (privileges), so it's off unless asked for.

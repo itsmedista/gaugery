@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<title>Monitorr</title>
+<title>Gaugery</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link href="fonts.css" rel="stylesheet">
 <link rel="stylesheet" href="gauge.css">
@@ -130,7 +130,7 @@ main{max-width:1320px;margin:0 auto;padding:24px}
 <body>
 <header class="top">
   <img src="icon.svg" width="34" height="34" alt="">
-  <div class="word"><b>Monitorr</b><span id="summary" data-i18n>Loading servers…</span></div>
+  <div class="word"><b>Gaugery</b><span id="summary" data-i18n>Loading servers…</span></div>
   <span class="spacer"></span>
   <div class="seg" id="density" role="group" aria-label="Card size">
     <button data-d="detailed" aria-pressed="true" title="Detailed cards" data-i18n-attr="title"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M2 9h12"/></svg><span class="lbl" data-i18n>Detailed</span></button>
@@ -150,13 +150,13 @@ main{max-width:1320px;margin:0 auto;padding:24px}
 <dialog id="dlg">
   <form id="add-form" method="dialog">
     <h2 data-i18n>Add a server</h2>
-    <p class="hint"><span data-i18n>Install the Monitorr agent on it first:</span> <code>sudo ./install.sh --agent</code> <span data-i18n>(or its Docker setup). It prints the address and a pairing code to paste here. The code lets Monitorr check that it's really talking to that server.</span></p>
+    <p class="hint"><span data-i18n>Install the Gaugery agent on it first:</span> <code>sudo ./install.sh --agent</code> <span data-i18n>(or its Docker setup). It prints the address and a pairing code to paste here. The code lets Gaugery check that it's really talking to that server.</span></p>
     <label for="f-name" data-i18n>Name</label>
     <input id="f-name" name="name" placeholder="NAS" required maxlength="60">
     <label for="f-url" data-i18n>Address</label>
     <input id="f-url" name="url" placeholder="https://100.64.0.12:8088" required spellcheck="false" autocapitalize="none">
     <label for="f-token" data-i18n>Pairing code</label>
-    <input id="f-token" name="pairing" placeholder="mtr1.…" required spellcheck="false" autocapitalize="none" autocomplete="off">
+    <input id="f-token" name="pairing" placeholder="gry1.…" required spellcheck="false" autocapitalize="none" autocomplete="off">
     <p class="err" id="f-err" role="alert"></p>
     <div class="row">
       <button type="button" class="btn" id="f-cancel" data-i18n>Cancel</button>
@@ -315,11 +315,11 @@ async function refresh() {
     $('#summary').textContent = t(servers.length === 1 ? '{n} server' : '{n} servers', {n: servers.length}) + ' · '
       + (bad ? t(bad === 1 ? '{n} needs attention' : '{n} need attention', {n: bad}) : t('all healthy'));
     render();
-    const title = bad ? `(${bad}) Monitorr` : 'Monitorr';
+    const title = bad ? `(${bad}) Gaugery` : 'Gaugery';
     if (document.title !== title) document.title = title;
   } catch (e) {
     if (e.message === 'signed out') return;
-    $('#summary').textContent = t("Can't reach Monitorr. Retrying…");
+    $('#summary').textContent = t("Can't reach Gaugery. Retrying…");
   }
   timer = setTimeout(refresh, 5000);
 }

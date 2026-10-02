@@ -4,17 +4,17 @@
 # Same layout as docker-compose.yml (unprivileged web interface, agent over a Unix socket, Docker
 # socket proxy), plus a pretend remote server on https://localhost:8090 to pair with.
 # Works on Docker Desktop too, where it monitors Docker's Linux VM.
-name: monitorr-dev
+name: gaugery-dev
 
 services:
-  monitorr-dev:
+  gaugery-dev:
     build: .
-    image: monitorr:dev
-    container_name: monitorr-dev
+    image: gaugery:dev
+    container_name: gaugery-dev
     environment:
       ROLE: hub
       HUB_DB: /data/hub.db
-      LOCAL_AGENT: unix:/run/monitorr/agent.sock
+      LOCAL_AGENT: unix:/run/gaugery/agent.sock
       AGENT_TOKEN: ${AGENT_TOKEN:?add AGENT_TOKEN to .env}
       AUTH_USER: ${AUTH_USER:-admin}
       AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
@@ -23,7 +23,7 @@ services:
       - "127.0.0.1:8089:8088"
     volumes:
       - hub-data-dev:/data
-      - agent-socket-dev:/run/monitorr
+      - agent-socket-dev:/run/gaugery
     user: "10001:10001"
     read_only: true
     tmpfs: [/tmp]
@@ -31,14 +31,14 @@ services:
     security_opt: ["no-new-privileges:true"]
     sysctls:
       net.ipv4.ping_group_range: "0 2147483647"
-    depends_on: [monitorr-dev-agent]
+    depends_on: [gaugery-dev-agent]
 
-  monitorr-dev-agent:
-    image: monitorr:dev
-    container_name: monitorr-dev-agent
+  gaugery-dev-agent:
+    image: gaugery:dev
+    container_name: gaugery-dev-agent
     environment:
       ROLE: agent
-      AGENT_LISTEN: unix:/run/monitorr/agent.sock
+      AGENT_LISTEN: unix:/run/gaugery/agent.sock
       AGENT_SOCKET_GROUP: 10001
       AGENT_TOKEN: ${AGENT_TOKEN}
       HOST_ROOT: /host
@@ -52,7 +52,7 @@ services:
     volumes:
       - /:/host:ro
       - ./data-dev:/data
-      - agent-socket-dev:/run/monitorr
+      - agent-socket-dev:/run/gaugery
     user: "0:0"
     pid: host
     read_only: true
@@ -63,11 +63,11 @@ services:
     networks: [default, docker-api]
     depends_on: [docker-proxy]
 
-  # A pretend remote server: pair it on the overview with https://monitorr-agent:8088 and the
-  # pairing code from `docker logs monitorr-agent`.
-  monitorr-agent:
-    image: monitorr:dev
-    container_name: monitorr-agent
+  # A pretend remote server: pair it on the overview with https://gaugery-agent:8088 and the
+  # pairing code from `docker logs gaugery-dev-remote`.
+  gaugery-agent:
+    image: gaugery:dev
+    container_name: gaugery-dev-remote
     environment:
       ROLE: agent
       AGENT_LISTEN: tcp
@@ -76,7 +76,7 @@ services:
       DB_PATH: /data/metrics.db
       DOCKER_HOST: tcp://docker-proxy:2375
       DOCKER_ACTIONS_HOST: tcp://docker-actions:2375
-      ALLOW_LOGS: demo-web,monitorr-agent
+      ALLOW_LOGS: demo-web,gaugery-dev-remote
       ALLOW_CONTAINER_ACTIONS: demo-web
       ALERT_DISK_WARN: 1  # a low threshold so this server's card shows alerts (red) right away
       RETENTION_DAYS: 1
@@ -98,7 +98,7 @@ services:
 
   docker-proxy:
     image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
-    container_name: monitorr-dev-docker-proxy
+    container_name: gaugery-dev-docker-proxy
     environment:
       CONTAINERS: 1
       POST: 0
@@ -113,7 +113,7 @@ services:
   # COMPOSE_PROFILES=actions in .env, together with ALLOW_CONTAINER_ACTIONS on the agent.
   docker-actions:
     image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
-    container_name: monitorr-dev-docker-actions
+    container_name: gaugery-dev-docker-actions
     restart: unless-stopped
     environment:
       POST: 1                  # POSTs pass the first gate, but the only ones that match an allow rule
