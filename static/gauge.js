@@ -1,4 +1,4 @@
-// The one gauge used across Monitorr (styles in gauge.css).
+// The one gauge used across Gaugery (styles in gauge.css).
 //   Gauge.html({id, label, sub, frac})  markup; frac (0..1) is the starting fill
 //   Gauge.set(el, {frac, level, num, unit, sub, title})  update in place; the fill animates
 //   Gauge.level(frac, [warn, crit])  'ok' | 'warn' | 'crit' for the fill color

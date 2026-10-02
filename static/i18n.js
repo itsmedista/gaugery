@@ -5,7 +5,7 @@
 (() => {
   const LANGS = {en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch'};
   const LOCALES = {en: 'en-GB', fr: 'fr-FR', es: 'es-ES', de: 'de-DE'};
-  const DICT = window.MONITORR_DICT || {};
+  const DICT = window.GAUGERY_DICT || {};
   let lang = 'en';
 
   function setLang(l) {

@@ -1,4 +1,4 @@
-/* Dialogs and form fields shared by every Monitorr page (colors from each page's tokens). */
+/* Dialogs and form fields shared by every Gaugery page (colors from each page's tokens). */
 .btn.primary{border:0;color:#08201C;font-weight:600;background:linear-gradient(90deg,var(--accent,var(--teal)),var(--accent2,var(--sky)))}
 .btn.primary:hover{filter:brightness(1.07)}
 .btn.primary:disabled{opacity:.6;cursor:default;filter:none}

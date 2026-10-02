@@ -1,4 +1,4 @@
-/* The one gauge used across Monitorr: a 270-degree ring with the reading in the middle.
+/* The one gauge used across Gaugery: a 270-degree ring with the reading in the middle.
    Colors come from each page's tokens (--teal, --sky, --warn, --crit, --panel...). */
 .gauge{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 8px;text-align:center;min-width:0}
 .gauge svg{display:block;width:100%;max-width:124px;margin:0 auto;height:auto}
