@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<title>Settings · Monitorr</title>
+<title>Settings · Gaugery</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link href="fonts.css" rel="stylesheet">
 <link rel="stylesheet" href="forms.css">
@@ -148,7 +148,7 @@ code{font:12.5px var(--mono);background:var(--bg);padding:1px 6px;border-radius:
 
       <div class="card">
         <h2 data-i18n>Defaults</h2>
-        <p class="hint" data-i18n>How Monitorr shows things until you change them on a page.</p>
+        <p class="hint" data-i18n>How Gaugery shows things until you change them on a page.</p>
         <div class="row"><span class="lbl" data-i18n>Time format</span>
           <div class="seg" data-pref="time_format"><button data-v="24h" data-i18n>24-hour</button><button data-v="12h" data-i18n>12-hour</button></div></div>
         <div class="row"><span class="lbl" data-i18n>Temperature</span>
@@ -187,7 +187,7 @@ code{font:12.5px var(--mono);background:var(--bg);padding:1px 6px;border-radius:
         <form id="profile-form">
           <div class="field"><label for="f-name" data-i18n>Display name</label><input id="f-name" maxlength="60" autocomplete="name"></div>
           <div class="field"><label for="f-email" data-i18n>Email</label><input id="f-email" type="email" maxlength="254" autocomplete="email">
-            <small style="color:var(--faint);font-size:12px" data-i18n>Monitorr doesn't send email. It's only shown on your profile.</small></div>
+            <small style="color:var(--faint);font-size:12px" data-i18n>Gaugery doesn't send email. It's only shown on your profile.</small></div>
           <div class="field"><label for="f-user" data-i18n>Username</label><input id="f-user" readonly>
             <small style="color:var(--faint);font-size:12px"><span data-i18n>Used to sign in. Change it on the server:</span> <code>AUTH_USER</code></small></div>
           <button class="btn primary" data-i18n>Save profile</button>
@@ -232,7 +232,7 @@ code{font:12.5px var(--mono);background:var(--bg);padding:1px 6px;border-radius:
         <div class="act" id="activity"></div>
       </div>
     </section>
-    <p class="legal"><span data-i18n>Monitorr is free software under the</span> <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="noopener noreferrer">GNU AGPL v3</a> · <a href="https://github.com/itsmedista/server-monitor" rel="noopener noreferrer" data-i18n>Source code</a></p>
+    <p class="legal"><span data-i18n>Gaugery is free software under the</span> <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="noopener noreferrer">GNU AGPL v3</a> · <a href="https://github.com/itsmedista/server-monitor" rel="noopener noreferrer" data-i18n>Source code</a></p>
   </main>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -241,7 +241,7 @@ code{font:12.5px var(--mono);background:var(--bg);padding:1px 6px;border-radius:
 <script>
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-const M = window.Monitorr;
+const M = window.Gaugery;
 let me = null, toastTimer = null;
 
 function toast(msg, kind = '') {
@@ -404,8 +404,8 @@ $('#tfa').addEventListener('click', async e => {
     try { await navigator.clipboard.writeText(e.target.dataset.copy); toast(t('Copied')); } catch { toast(t("Couldn't copy: select the codes and copy them"), 'err'); }
   } else if (e.target.dataset.download != null) {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([`Monitorr recovery codes (${me.user})\n\n${e.target.dataset.download}\n`], {type: 'text/plain'}));
-    a.download = 'monitorr-recovery-codes.txt'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    a.href = URL.createObjectURL(new Blob([`Gaugery recovery codes (${me.user})\n\n${e.target.dataset.download}\n`], {type: 'text/plain'}));
+    a.download = 'gaugery-recovery-codes.txt'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   } else if (e.target.dataset.done != null) {
     loadSecurity();
   }

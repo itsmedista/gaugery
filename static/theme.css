@@ -1,4 +1,4 @@
-/* Theme, accent colour and the account menu, shared by every Monitorr page.
+/* Theme, accent colour and the account menu, shared by every Gaugery page.
    html[data-theme] and html[data-accent] are set by account.js from your settings; these rules
    override each page's own :root colour tokens. */
 html{--accent:var(--teal);--accent2:var(--sky);--topbar:rgba(13,20,28,.88);--shadow:rgba(0,0,0,.6)}

@@ -1,16 +1,39 @@
-# Monitorr
+<img src="static/icon.svg" width="72" alt="">
+
+# Gaugery
 
 A monitoring dashboard for your Linux servers. It samples every 2 seconds, keeps
 per-minute history in SQLite, checks that your services answer, and serves a live
 web page behind a login.
 
+## Upgrading from Monitorr
+
+Monitorr is now called **Gaugery**. Upgrading keeps your settings, history, password,
+two-factor sign-in, paired servers and service checks. Everyone is signed out once, because
+the sign-in cookie has a new name.
+
+- **Docker:** `git pull`, then `docker compose up -d --build --remove-orphans`. The
+  containers are now `gaugery` and `gaugery-agent`; `--remove-orphans` removes the old
+  `monitorr` ones. Your data volumes keep their names. On agent-only servers, add
+  `-f docker-compose.agent.yml`.
+- **Without Docker:** `git pull`, then `sudo ./install.sh` (add `--agent` on agent-only
+  servers). It stops the `monitorr` services and moves `/etc/monitorr.env`,
+  `/var/lib/monitorr` and `/var/lib/monitorr-hub` to their `gaugery` names. It also renames
+  the `monitorr` system user, keeping its ID so file ownership doesn't change.
+- **Remote servers:** remote servers stay paired; their certificates don't change. Agents
+  you haven't upgraded yet keep working with an upgraded web interface, and their old
+  `mtr1.` pairing codes are still accepted.
+- **Authenticator apps:** two-factor entries made before the rename still show "Monitorr" in
+  your authenticator app. They keep working; to change the label, turn two-factor off and on
+  again.
+
 ## How it's put together
 
-Monitorr is two parts, so the part you open in a browser never has power over your server:
+Gaugery is two parts, so the part you open in a browser never has power over your server:
 
-- **The web interface** (`monitorr`): pages, sign-in, service checks, your list of servers.
+- **The web interface** (`gaugery`): pages, sign-in, service checks, your list of servers.
   It runs as an unprivileged user with no access to the host or to Docker.
-- **The agent** (`monitorr-agent`): collects one server's data. It's the only part with
+- **The agent** (`gaugery-agent`): collects one server's data. It's the only part with
   host access, it has no web page, and it answers only the web interface, which proves
   itself with a secret token. On the same machine they talk over a Unix socket (no port).
   On other servers the agent listens on HTTPS with its own certificate, which the web
@@ -22,7 +45,7 @@ Monitorr is two parts, so the part you open in a browser never has power over yo
 
 ## Install with Docker (recommended)
 
-    git clone https://github.com/itsmedista/server-monitor.git monitorr && cd monitorr
+    git clone https://github.com/itsmedista/server-monitor.git gaugery && cd gaugery
     ./docker-setup.sh          # asks for your password, writes .env
     docker compose up -d
 
@@ -30,7 +53,7 @@ Open `http://<server-ip>:8088` and sign in as `admin`. Settings are in `.env` (e
 option is explained in `.env.example`); apply changes with `docker compose up -d`.
 
 - Update after pulling changes: `docker compose up -d --build`
-- Logs: `docker logs -f monitorr` (web interface), `docker logs -f monitorr-agent`
+- Logs: `docker logs -f gaugery` (web interface), `docker logs -f gaugery-agent`
 - History is kept in `./data`; the web interface's own data (servers, checks, layout)
   in the `hub-data` volume.
 - Drive health (SMART) needs raw disk access, so it's opt-in: list your disks in
@@ -51,10 +74,10 @@ connections were encrypted": remove them and add them again with their pairing c
 
     sudo ./install.sh
 
-It first asks a few questions and writes the answers to `/etc/monitorr.env`, so you
+It first asks a few questions and writes the answers to `/etc/gaugery.env`, so you
 don't have to edit it by hand. Press Enter to take each suggestion:
 
-- **Where to open Monitorr:** over Tailscale only, behind Tailscale serve or a reverse
+- **Where to open Gaugery:** over Tailscale only, behind Tailscale serve or a reverse
   proxy on the same machine, or from your whole LAN (then it offers HTTPS with its own
   certificate)
 - the **port** and your **username**, then your **password**
@@ -62,12 +85,12 @@ don't have to edit it by hand. Press Enter to take each suggestion:
 - **container logs** and **start/stop/restart**: none, all, or a list of containers
 - **drive health (SMART)**, and an **ntfy** topic (and token) for phone alerts
 
-Then it runs two services: `monitorr` (web interface, as the unprivileged `monitorr` user,
-heavily sandboxed) and `monitorr-agent` (root, reached only over `/run/monitorr/agent.sock`).
-Running it again later updates Monitorr and keeps your settings. To answer the questions
+Then it runs two services: `gaugery` (web interface, as the unprivileged `gaugery` user,
+heavily sandboxed) and `gaugery-agent` (root, reached only over `/run/gaugery/agent.sock`).
+Running it again later updates Gaugery and keeps your settings. To answer the questions
 again: `sudo ./install.sh --reconfigure`. To change a setting by hand: edit
-`/etc/monitorr.env` (readable by root only), then
-`sudo systemctl restart monitorr-agent monitorr`.
+`/etc/gaugery.env` (readable by root only), then
+`sudo systemctl restart gaugery-agent gaugery`.
 
 ## Monitoring more servers
 
@@ -76,12 +99,12 @@ On each extra server, install just the agent:
     sudo ./install.sh --agent                              # systemd (asks a few questions)
     ./docker-setup.sh --agent && docker compose -f docker-compose.agent.yml up -d   # Docker
 
-It prints an address and a **pairing code**. On your main Monitorr click **Add server**,
+It prints an address and a **pairing code**. On your main Gaugery click **Add server**,
 give it a name, and paste both. The pairing code carries the agent's token and its
 certificate's fingerprint: the web interface refuses to connect if the certificate at that
 address isn't the one in the code, so nobody in between can read or impersonate the agent.
-(Lost the code? `docker compose -f docker-compose.agent.yml logs monitorr-agent`, or
-`sudo /opt/monitorr/venv/bin/python /opt/monitorr/app.py --pairing-code` with the
+(Lost the code? `docker compose -f docker-compose.agent.yml logs gaugery-agent`, or
+`sudo /opt/gaugery/venv/bin/python /opt/gaugery/app.py --pairing-code` with the
 settings loaded.)
 
 The web interface must reach the agent's port; Tailscale is the easy way (set the
@@ -133,7 +156,7 @@ bearer tokens, JWTs, AWS keys) before they leave the server; it's best-effort, w
 why logs are opt-in per container (`LOG_REDACT=false` turns the scrubbing off).
 
 Every container action asks for your password if you last entered it more than 15
-minutes ago, is recorded on both sides, and goes to ntfy. Monitorr won't stop its own
+minutes ago, is recorded on both sides, and goes to ntfy. Gaugery won't stop its own
 container.
 
 ## Your account and settings
@@ -146,12 +169,12 @@ account, so every device looks the same:
   time range server pages open on; card size; and which page opens after signing in.
 - **Account:** a built-in picture, your own upload (cropped and shrunk in your browser, stored
   and served only as a checked PNG, JPEG or WebP), or your initials; display name and email
-  (Monitorr doesn't send email). The username is set on the server (`AUTH_USER`).
+  (Gaugery doesn't send email). The username is set on the server (`AUTH_USER`).
 - **Security:** change your password (it signs out every other session), two-factor sign-in
   with 8 one-time recovery codes, "sign out everywhere else", and the activity log.
 
 Forgot the password? On the server: `python app.py --reset-password` (Docker:
-`docker compose exec monitorr python app.py --reset-password`), then restart the web
+`docker compose exec gaugery python app.py --reset-password`), then restart the web
 interface. A password changed in Settings is kept in the database and wins over
 `AUTH_PASSWORD_HASH`, until you change `AUTH_PASSWORD_HASH` on the server; then that wins again.
 
@@ -162,8 +185,8 @@ interface. A password changed in Settings is kept in the database and wins over
 - **Two-factor sign-in:** Settings → Security → Turn on, then scan or type the key into
   any authenticator app. Save the 8 recovery codes it shows: each one signs you in once
   instead of a code. Lost your phone and the codes? On the server:
-  `docker compose exec monitorr python app.py --disable-2fa` (Docker) or
-  `sudo -u monitorr ... app.py --disable-2fa` with the settings loaded (systemd).
+  `docker compose exec gaugery python app.py --disable-2fa` (Docker) or
+  `sudo -u gaugery ... app.py --disable-2fa` with the settings loaded (systemd).
 - Forgot the password: `python app.py --reset-password` on the server (see
   [Your account and settings](#your-account-and-settings)).
 - Sensitive changes (servers, service checks, container actions, two-factor) ask for your
@@ -183,10 +206,10 @@ Pick one:
   (Docker) or `HOST=127.0.0.1` (systemd) and `TRUSTED_PROXIES=127.0.0.1` (Docker on Linux:
   the bridge gateway, usually `172.17.0.1`), then `tailscale serve --bg 8088`. Open
   `https://<machine>.<tailnet>.ts.net`.
-- **Built in:** `TLS=auto` serves HTTPS with Monitorr's own certificate (your browser asks
+- **Built in:** `TLS=auto` serves HTTPS with Gaugery's own certificate (your browser asks
   once whether to trust it), or `TLS_CERT`/`TLS_KEY` for your own.
 - **Your reverse proxy:** point it at port 8088 and set `TRUSTED_PROXIES` to its address,
-  so Monitorr sees the real client address and knows the connection is HTTPS.
+  so Gaugery sees the real client address and knows the connection is HTTPS.
 
 With HTTPS the session cookie is marked Secure. With a certificate browsers trust (Tailscale
 serve, your own, or your proxy's) they're also told to always use HTTPS (HSTS). Not with
@@ -194,7 +217,7 @@ serve, your own, or your proxy's) they're also told to always use HTTPS (HSTS). 
 
 ## Security
 
-What Monitorr does for you:
+What Gaugery does for you:
 
 - **Least privilege:** the web interface has no host access, no Docker, no root and no
   Linux capabilities, on a read-only filesystem (systemd rates its sandbox 3.0 "OK"; the
@@ -207,9 +230,9 @@ What Monitorr does for you:
 - **Sign-in:** see above. Security events (sign-ins from new addresses, repeated wrong
   passwords, servers/checks/two-factor changed, container actions) are listed under
   Security and sent to ntfy.
-- **Browser protections:** a strict Content-Security-Policy (only Monitorr's own scripts
+- **Browser protections:** a strict Content-Security-Policy (only Gaugery's own scripts
   run), no framing, `nosniff`, no referrer, `SameSite=Strict` cookies, and changes only
-  from Monitorr's own pages as JSON.
+  from Gaugery's own pages as JSON.
 - **Remote servers are untrusted:** the web interface checks and trims what agents send,
   never serves an agent's reply as a page, and the pages escape everything.
 - **Supply chain:** the base images (Python, socket proxy) are pinned by digest, and every
@@ -242,8 +265,8 @@ The sandbox needs a `.env` next to the compose file with `AUTH_PASSWORD_HASH`, `
 and `DEV_AGENT_TOKEN` (make tokens with `python app.py --new-token`). It has the same
 layout as production, on port 8089, with its own data. It
 never sends phone alerts. It also starts a pretend remote server: add it on the overview
-with the address `https://monitorr-agent:8088` and the pairing code from
-`docker logs monitorr-agent`.
+with the address `https://gaugery-agent:8088` and the pairing code from
+`docker logs gaugery-dev-remote`.
 
 ## What it watches
 
@@ -269,7 +292,7 @@ with the address `https://monitorr-agent:8088` and the pairing code from
 
 Copyright (C) 2026 itsmedista.
 
-Monitorr is free software: you can redistribute it and/or modify it under the terms of the
+Gaugery is free software: you can redistribute it and/or modify it under the terms of the
 [GNU Affero General Public License, version 3](LICENSE) (AGPL-3.0-only). It comes with no
 warranty. In short:
 - You may use, study, change and share it, also commercially.
@@ -279,7 +302,7 @@ warranty. In short:
 
 Other software it uses and their licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-**Privacy:** Monitorr sends nothing to its authors or anyone else: no telemetry, analytics or
+**Privacy:** Gaugery sends nothing to its authors or anyone else: no telemetry, analytics or
 update checks, and its fonts are served locally. It sets one sign-in cookie, needed to stay
 signed in, so there's no cookie banner. [PRIVACY.md](PRIVACY.md) lists everything it stores,
 how long it keeps it, and every connection it makes.
@@ -287,6 +310,14 @@ how long it keeps it, and every connection it makes.
 ## What's changed
 
 Newest first. Each entry links to its pull request, which has the details and test results.
+
+### Monitorr is now Gaugery ([#13](https://github.com/itsmedista/server-monitor/pull/13))
+- New name, because another self-hosted monitoring project is already called Monitorr. The
+  new icon is a ring gauge drawn as a G; [BRAND.md](BRAND.md) has the colours, type and
+  usage.
+- Everything is renamed: pages, containers, services, paths, the system user and the
+  cookie. Pairing codes now start with `gry1.`. See *Upgrading from Monitorr* above: data
+  carries over, and you're signed out once.
 
 ### License, privacy and fonts ([#12](https://github.com/itsmedista/server-monitor/pull/12))
 - Licensed under the GNU AGPL v3, with a "Source code" link on the sign-in and Settings

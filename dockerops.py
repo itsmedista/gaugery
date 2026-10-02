@@ -1,4 +1,4 @@
-"""Container logs and actions for Monitorr, straight from the Docker API.
+"""Container logs and actions for Gaugery, straight from the Docker API.
 
 Both are off unless this server's settings allow them, per container:
   ALLOW_LOGS=all | plex,nginx          (logs often contain secrets)
@@ -200,8 +200,8 @@ class Docker:
         if action not in ACTIONS:
             raise DockerError("Action must be start, stop or restart")
         c = await self._permitted(name, ACTIONS_PERMIT, "Container actions")
-        if action == "stop" and "monitorr" in c["image"].lower():
-            raise DockerError("That's Monitorr itself. Stopping it would take this page down; stop it on the server.")
+        if action == "stop" and any(n in c["image"].lower() for n in ("gaugery", "monitorr")):  # also before a rebuild
+            raise DockerError("That's Gaugery itself. Stopping it would take this page down; stop it on the server.")
         try:
             r = await self.actions.post(f"/containers/{c['id']}/{action}", params={"t": 10},
                                         timeout=httpx.Timeout(40))

@@ -1,17 +1,17 @@
-# Monitorr agent for a server that another Monitorr (the hub) watches.
+# Gaugery agent for a server that another Gaugery (the hub) watches.
 #
 #   ./docker-setup.sh --agent                                     (writes .env with a token)
 #   docker compose -f docker-compose.agent.yml up -d --build
-#   docker compose -f docker-compose.agent.yml logs monitorr-agent   (shows the pairing code)
+#   docker compose -f docker-compose.agent.yml logs gaugery-agent   (shows the pairing code)
 #
 # Then on the hub: Add server -> https://<this server's address>:8088 and the pairing code.
 # The hub checks this agent's certificate against the code, so the connection can't be intercepted.
 
 services:
-  monitorr-agent:
+  gaugery-agent:
     build: .
-    image: monitorr:latest
-    container_name: monitorr-agent
+    image: gaugery:latest
+    container_name: gaugery-agent
     restart: unless-stopped
     environment:
       ROLE: agent
@@ -46,7 +46,7 @@ services:
 
   docker-proxy:
     image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
-    container_name: monitorr-docker-proxy
+    container_name: gaugery-docker-proxy
     restart: unless-stopped
     environment:
       CONTAINERS: 1
@@ -62,7 +62,7 @@ services:
   # COMPOSE_PROFILES=actions in .env, together with ALLOW_CONTAINER_ACTIONS on the agent.
   docker-actions:
     image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
-    container_name: monitorr-docker-actions
+    container_name: gaugery-docker-actions
     restart: unless-stopped
     profiles: [actions]
     environment:

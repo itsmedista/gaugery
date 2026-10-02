@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<title>Sign in · Monitorr</title>
+<title>Sign in · Gaugery</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link href="fonts.css" rel="stylesheet">
 <style>
@@ -38,7 +38,7 @@ button:disabled{opacity:.6;cursor:default}
 <main class="card">
   <div class="logo">
     <img src="icon.svg" width="56" height="56" alt="">
-    <h1>Monitorr</h1>
+    <h1>Gaugery</h1>
     <p data-i18n>Sign in to see your servers</p>
   </div>
   <form id="f">
@@ -54,7 +54,7 @@ button:disabled{opacity:.6;cursor:default}
     <p class="err" id="err" role="alert"></p>
   </form>
 </main>
-<p class="legal"><span data-i18n>Monitorr is free software under the</span> <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="noopener noreferrer">GNU AGPL v3</a> · <a href="https://github.com/itsmedista/server-monitor" rel="noopener noreferrer" data-i18n>Source code</a></p>
+<p class="legal"><span data-i18n>Gaugery is free software under the</span> <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="noopener noreferrer">GNU AGPL v3</a> · <a href="https://github.com/itsmedista/server-monitor" rel="noopener noreferrer" data-i18n>Source code</a></p>
 <script>
 const f = document.getElementById('f'), err = document.getElementById('err'), go = document.getElementById('go');
 document.getElementById('user').focus();
@@ -78,7 +78,7 @@ f.addEventListener('submit', async e => {
     err.textContent = t((await r.json().catch(() => ({}))).detail || 'Sign in failed');
     f.password.select();
   } catch {
-    err.textContent = t("Can't reach Monitorr. Check that it's running.");
+    err.textContent = t("Can't reach Gaugery. Check that it's running.");
   }
   go.disabled = false;
 });

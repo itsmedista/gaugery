@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<title>Monitorr</title>
+<title>Gaugery</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link href="fonts.css" rel="stylesheet">
 <link rel="stylesheet" href="gauge.css">
@@ -243,7 +243,7 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
 <header class="top">
   <div class="brand">
     <a class="back" href="./" title="All servers" aria-label="All servers" data-i18n-attr="title,aria-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></a>
-    <a href="./" style="display:flex"><img src="icon.svg" width="30" height="30" alt="Monitorr: all servers" title="All servers"></a>
+    <a href="./" style="display:flex"><img src="icon.svg" width="30" height="30" alt="Gaugery: all servers" title="All servers"></a>
     <div style="min-width:0"><div class="host" id="host" data-i18n>Connecting</div><div class="hostsub" id="hostsub"></div></div>
   </div>
   <span class="conn" id="conn" data-s="connecting"><i></i><span data-i18n>Connecting</span></span>
@@ -380,7 +380,7 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
 <dialog id="svc-dlg">
   <form id="svc-form" method="dialog">
     <h2 id="svc-title" data-i18n>Add a service check</h2>
-    <p class="hint" data-i18n>Monitorr checks it from the machine it runs on, and raises an alert after two failures in a row.</p>
+    <p class="hint" data-i18n>Gaugery checks it from the machine it runs on, and raises an alert after two failures in a row.</p>
     <label for="c-name" data-i18n>Name</label>
     <input id="c-name" required maxlength="60" placeholder="Plex">
     <div class="pair">
@@ -425,7 +425,7 @@ function readTheme() {
   Object.assign(THEME, {text: v('--faint') || '#5E7084', cross: v('--muted') || 'rgba(220,228,236,.45)', panel: v('--panel') || '#131C26'});
 }
 readTheme();
-addEventListener('monitorr:theme', () => { readTheme(); if (typeof requestDraw === 'function') requestDraw(); });
+addEventListener('gaugery:theme', () => { readTheme(); if (typeof requestDraw === 'function') requestDraw(); });
 const COL = {teal:'#35D0BA', sky:'#4FA8FF', violet:'#A08CFF', amber:'#F5B942', rose:'#FF6F91', lime:'#A5D65C', slate:'#4E6175', orange:'#FF9955'};
 const PAL = [COL.teal, COL.sky, COL.violet, COL.amber, COL.rose, COL.lime, COL.orange, '#62E0E8', '#D58CFF', '#F7D774', '#7FC4FF', '#FFB3C7'];
 const SPANS = {'1h':3600, '6h':21600, '24h':86400, '7d':604800};
@@ -433,7 +433,7 @@ const LIVE_WINDOW = 300;
 const FONT = '10.5px "IBM Plex Sans", system-ui, sans-serif';
 const VIRT = {none:'Bare metal', microsoft:'Hyper-V', kvm:'KVM', qemu:'QEMU', vmware:'VMware', oracle:'VirtualBox', xen:'Xen', lxc:'LXC container', docker:'Docker', wsl:'WSL', 'systemd-nspawn':'nspawn'};
 
-// Which server this page shows: the one Monitorr runs on, or a remote agent relayed by it.
+// Which server this page shows: the one Gaugery runs on, or a remote agent relayed by it.
 const SID = new URLSearchParams(location.search).get('id') || 'local';
 const API = 'api/s/' + encodeURIComponent(SID) + '/';  // every server's data, this one's too, comes from its agent via the hub
 const $ = (s, r = document) => r.querySelector(s);
@@ -453,7 +453,7 @@ function fmtBytes(v) {
 const fmtRate = v => v == null ? '–' : fmtBytes(v) + '/s';
 const fmtPct = v => v == null || !isFinite(v) ? '–' : (Math.abs(v) >= 10 ? v.toFixed(0) : v.toFixed(1)) + '%';
 const fmt2 = v => v == null ? '–' : v.toFixed(2);
-const fmtTemp = v => Monitorr.fmtTemp(v);  // readings are °C; shown in your unit
+const fmtTemp = v => Gaugery.fmtTemp(v);  // readings are °C; shown in your unit
 function fmtDur(s) {
   s = Math.max(0, s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
   return d ? t('{d}d {h}h', {d, h}) : h ? t('{h}h {m}m', {h, m}) : t('{m}m', {m});
@@ -464,7 +464,7 @@ function fmtAgo(ts) {
   return t('{time} ago', {time: fmtDur(s)});
 }
 const pad2 = n => String(n).padStart(2, '0');
-function fmtClock(t, secs = true) { return Monitorr.fmtClock(t, secs); }
+function fmtClock(t, secs = true) { return Gaugery.fmtClock(t, secs); }
 function fmtWhen(t) {
   const d = new Date(t * 1000), today = new Date();
   const same = d.toDateString() === today.toDateString();
@@ -710,7 +710,7 @@ function ensureCharts() {
   if (tempKeys.length) {
     $('#sensors').hidden = false; $('#nav-sensors').hidden = false;
     const dims = tempKeys.map((k, i) => ({key: k, name: k.slice(5), color: PAL[i % PAL.length]}));
-    if (!built.temp) built.temp = new Chart($('#g-temp'), {title: t('Temperatures'), wide: true, h: 170, autoMin: true, fmt: fmtTemp, axis: v => Math.round(Monitorr.temp(v)) + '°', dims});
+    if (!built.temp) built.temp = new Chart($('#g-temp'), {title: t('Temperatures'), wide: true, h: 170, autoMin: true, fmt: fmtTemp, axis: v => Math.round(Gaugery.temp(v)) + '°', dims});
     else if (built.temp.cfg.dims.length !== dims.length) built.temp.setDims(dims);
   }
   for (const k of keys) {
@@ -746,7 +746,7 @@ const GAUGES = [
   {id:'swap', label: t('Swap'), get: s => { const tot = s['swap:total'] ?? info.swap_total; return tot ? {v: s['swap:pct'], max: 100, num: Math.round(s['swap:pct'] ?? 0), unit: '%', sub: t('{used} of {total}', {used: fmtBytes(s['swap:used']), total: fmtBytes(tot)})} : {v: 0, max: 100, num: '–', unit: t('none'), sub: t('No swap configured')}; }},
   {id:'disk', label: t('Disk I/O'), rate: true, get: s => { const v = (s['disk:total:r'] || 0) + (s['disk:total:w'] || 0); const [n, u] = splitUnit(fmtRate(v)); return {v, max: sumPeak('disk:total:r', 'disk:total:w', 8 * MiB), num: n, unit: u, sub: `R ${fmtRate(s['disk:total:r'])}  W ${fmtRate(s['disk:total:w'])}`}; }},
   {id:'net', label: t('Network'), rate: true, get: s => { const v = (s['net:total:rx'] || 0) + (s['net:total:tx'] || 0); const [n, u] = splitUnit(fmtRate(v)); return {v, max: sumPeak('net:total:rx', 'net:total:tx', 2 * MiB), num: n, unit: u, sub: t('In {rx}  Out {tx}', {rx: fmtRate(s['net:total:rx']), tx: fmtRate(s['net:total:tx'])})}; }},
-  {id:'temp', label: t('Hottest sensor'), get: s => { let best = null; for (const k in s) if (k.startsWith('temp:') && (best == null || s[k] > s[best])) best = k; return best ? {v: s[best], max: 100, num: Math.round(Monitorr.temp(s[best])), unit: Monitorr.tempUnit(), sub: best.slice(5), th: [.75, .88]} : {v: 0, max: 100, num: '–', unit: Monitorr.tempUnit(), sub: t('No sensors found')}; }},
+  {id:'temp', label: t('Hottest sensor'), get: s => { let best = null; for (const k in s) if (k.startsWith('temp:') && (best == null || s[k] > s[best])) best = k; return best ? {v: s[best], max: 100, num: Math.round(Gaugery.temp(s[best])), unit: Gaugery.tempUnit(), sub: best.slice(5), th: [.75, .88]} : {v: 0, max: 100, num: '–', unit: Gaugery.tempUnit(), sub: t('No sensors found')}; }},
   {id:'store', label: t('Fullest drive'), get: (s, st) => { const ds = (st?.drives || []).filter(d => d.pct != null && !DISC_FS.includes(d.fs)); if (!ds.length) return {v: 0, max: 100, num: '–', unit: '%', sub: ''}; const d = ds.reduce((a, b) => b.pct > a.pct ? b : a); return {v: d.pct, max: 100, num: Math.round(d.pct), unit: '%', sub: d.mount, th: [.85, .95]}; }},
 ];
 function buildGauges() {
@@ -773,7 +773,7 @@ function smartHTML(d, smartAvailable, smartEnabled) {
   if (!sm && smartEnabled === false) return `<span class="smart na" title="${esc(t('Drive health needs raw disk access, so it is off unless SMART=true is set on this server'))}"><i></i>${esc(t('SMART off'))}</span>`;
   if (!sm) return `<span class="smart na" title="${esc(t(smartAvailable ? 'No SMART data for this device yet' : 'Install smartmontools to read drive health'))}"><i></i>${esc(t(smartAvailable ? 'No SMART data' : 'smartctl missing'))}</span>`;
   if (sm.status === 'unavailable') return `<span class="smart na" title="${esc(sm.reason || '')}"><i></i>${esc(t('No SMART'))}</span>`;
-  const temp = sm.temp != null ? ` ${Monitorr.fmtTemp(sm.temp)}` : '';
+  const temp = sm.temp != null ? ` ${Gaugery.fmtTemp(sm.temp)}` : '';
   const detail = [sm.model, sm.hours != null ? `${sm.hours.toLocaleString()} power-on hours` : '', sm.reallocated != null ? `${sm.reallocated} reallocated` : '', sm.pending != null ? `${sm.pending} pending` : '', sm.wear != null ? `${sm.wear}% life used` : ''].filter(Boolean).join('\n');
   const st = oneOf(sm.status, ['ok', 'warning', 'failed'], 'na');
   const label = esc({ok: t('Healthy'), warning: t('Check drive'), failed: t('Failing')}[st] || sm.status);
@@ -923,7 +923,7 @@ function renderAlerts(st) {
 }
 
 function renderInfo() {
-  $('#host').textContent = info.name || info.hostname; document.title = (info.name || info.hostname) + ' · Monitorr';
+  $('#host').textContent = info.name || info.hostname; document.title = (info.name || info.hostname) + ' · Gaugery';
   $('#hostsub').textContent = t('{os}, kernel {kernel}', {os: info.os, kernel: info.kernel});
   const facts = [['Processor', info.cpu_model || info.arch], ['Threads', info.physical_cores ? t('{n} on {c} cores', {n: info.cores, c: info.physical_cores}) : String(info.cores)], ['Memory', fmtBytes(info.mem_total)], ['Platform', t(VIRT[info.virt] || info.virt)], ['Up for', `<span id="uptime">${fmtDur(Date.now() / 1000 - info.boot_time)}</span>`]];
   $('#facts').innerHTML = facts.map(([k, v]) => `<div><span>${esc(t(k))}</span><b>${k === 'Up for' ? v : esc(v)}</b></div>`).join('');
@@ -1293,7 +1293,7 @@ function ctrButtons(c) {
   let h = allowed('logs', c.name) ? `<button class="icon-btn" data-logs="${esc(c.name)}" title="${esc(t('Logs of {name}', {name: c.name}))}" aria-label="${esc(t('Logs of {name}', {name: c.name}))}">${icon('logs')}</button>` : '';
   if (allowed('actions', c.name)) {
     const b = (act, label) => `<button class="icon-btn act-${act}" data-act="${act}" data-ctr="${esc(c.name)}" title="${esc(t(label + ' {name}', {name: c.name}))}" aria-label="${esc(t(label + ' {name}', {name: c.name}))}">${icon(act)}</button>`;
-    const self = /monitorr/i.test(c.image || '');  // the server refuses to stop Monitorr itself
+    const self = /gaugery/i.test(c.image || '');  // the server refuses to stop Gaugery itself
     h += c.state === 'running' || c.state === 'restarting' ? b('restart', 'Restart') + (self ? '' : b('stop', 'Stop')) : b('start', 'Start');
   }
   return h;
@@ -1344,7 +1344,7 @@ async function boot() {
   if (mode === 'server') {
     try { onSample(await getJSON(API + 'state')); } catch (e) { ensureCharts(); requestDraw(); }
     connect();
-    if (Monitorr.prefs.default_range && Monitorr.prefs.default_range !== 'live') setRange(Monitorr.prefs.default_range);
+    if (Gaugery.prefs.default_range && Gaugery.prefs.default_range !== 'live') setRange(Gaugery.prefs.default_range);
   } else {
     setConn('demo'); onSample(demo.tick()); setInterval(() => onSample(demo.tick()), 2000);
   }

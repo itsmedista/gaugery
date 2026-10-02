@@ -3,8 +3,8 @@ metrics.db*
 __pycache__/
 *.tar.gz
 install.sh
-monitorr.service
-monitorr.env
+gaugery.service
+gaugery.env
 .env
 data-dev/
 .git

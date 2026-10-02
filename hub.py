@@ -1,4 +1,4 @@
-"""Monitorr hub: the web interface, sign-in, service checks and the list of servers.
+"""Gaugery hub: the web interface, sign-in, service checks and the list of servers.
 
 It runs unprivileged: no host access and no Docker. This machine's data comes from the local
 agent over a Unix socket; other servers' data from their agents over pinned TLS.
@@ -31,8 +31,8 @@ from security import PageCSP
 
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8088"))
-HUB_DB = os.environ.get("HUB_DB", "/var/lib/monitorr-hub/hub.db")
-LOCAL_AGENT = os.environ.get("LOCAL_AGENT", "").strip()        # unix:/run/monitorr/agent.sock
+HUB_DB = os.environ.get("HUB_DB", "/var/lib/gaugery-hub/hub.db")
+LOCAL_AGENT = os.environ.get("LOCAL_AGENT", "").strip()        # unix:/run/gaugery/agent.sock
 TRUSTED_PROXIES = os.environ.get("TRUSTED_PROXIES", "").strip()  # only these may set X-Forwarded-For
 ALLOW_HTTP_LOGIN = os.environ.get("ALLOW_HTTP_LOGIN", "").lower() in ("1", "true", "yes")
 TLS = os.environ.get("TLS", "").lower()                         # "auto": serve HTTPS with its own certificate
@@ -116,7 +116,7 @@ class Hub:
         self.remotes = Remotes(self.db, self.db_lock, LOCAL_AGENT or None, os.environ.get("AGENT_TOKEN", "").strip())
         self.checks = Checks(self.db, self.db_lock, self.remotes.name)
         # security-relevant events: kept here and sent to ntfy (NTFY_URL)
-        self.activity = AlertEngine("Monitorr", 0, on_event=self._store_event, history=history)
+        self.activity = AlertEngine("Gaugery", 0, on_event=self._store_event, history=history)
 
     def _store_event(self, ev):
         with self.db_lock:
@@ -183,7 +183,7 @@ def create_app():
         await remotes.close()
         await checks.close()
 
-    app = FastAPI(title="Monitorr", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="Gaugery", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.exception_handler(ReauthRequired)
     async def _reauth(_request, _exc):
@@ -647,6 +647,6 @@ def serve():
     if OWN_CERT:
         kw.update(ssl_certfile=os.environ["TLS_CERT"], ssl_keyfile=os.environ["TLS_KEY"])
     elif TLS == "auto":
-        cert, key = tlsutil.ensure_cert(app.state.hub.data_dir, "monitorr-hub")
+        cert, key = tlsutil.ensure_cert(app.state.hub.data_dir, "gaugery-hub")
         kw.update(ssl_certfile=cert, ssl_keyfile=key)
     uvicorn.run(app, **kw)

@@ -1,6 +1,6 @@
-# Monitorr on this server, as three containers:
-#   monitorr        the web interface. The only one with a port; no host access, no Docker, not root.
-#   monitorr-agent  collects this server's data. No port: only the web interface can talk to it.
+# Gaugery on this server, as three containers:
+#   gaugery        the web interface. The only one with a port; no host access, no Docker, not root.
+#   gaugery-agent  collects this server's data. No port: only the web interface can talk to it.
 #   docker-proxy    lets the agent list containers and read logs, and nothing that could take over the host.
 #
 # First time: ./docker-setup.sh   (writes .env with your password hash and the agent token)
@@ -8,15 +8,15 @@
 # Settings:   .env (see .env.example)
 
 services:
-  monitorr:
+  gaugery:
     build: .
-    image: monitorr:latest
-    container_name: monitorr
+    image: gaugery:latest
+    container_name: gaugery
     restart: unless-stopped
     environment:
       ROLE: hub
       HUB_DB: /data/hub.db
-      LOCAL_AGENT: unix:/run/monitorr/agent.sock
+      LOCAL_AGENT: unix:/run/gaugery/agent.sock
       AGENT_TOKEN: ${AGENT_TOKEN:?run ./docker-setup.sh first}
       AUTH_USER: ${AUTH_USER:-admin}
       AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:?run ./docker-setup.sh first}
@@ -32,7 +32,7 @@ services:
       - "${BIND:-0.0.0.0}:${PORT:-8088}:8088"
     volumes:
       - hub-data:/data
-      - agent-socket:/run/monitorr
+      - agent-socket:/run/gaugery
     user: "10001:10001"
     read_only: true
     tmpfs: [/tmp]
@@ -40,15 +40,15 @@ services:
     security_opt: ["no-new-privileges:true"]
     sysctls:
       net.ipv4.ping_group_range: "0 2147483647"   # ping for service checks without raw-socket rights
-    depends_on: [monitorr-agent]
+    depends_on: [gaugery-agent]
 
-  monitorr-agent:
-    image: monitorr:latest
-    container_name: monitorr-agent
+  gaugery-agent:
+    image: gaugery:latest
+    container_name: gaugery-agent
     restart: unless-stopped
     environment:
       ROLE: agent
-      AGENT_LISTEN: unix:/run/monitorr/agent.sock
+      AGENT_LISTEN: unix:/run/gaugery/agent.sock
       AGENT_SOCKET_GROUP: 10001                    # the web interface's group may open the socket
       AGENT_TOKEN: ${AGENT_TOKEN}
       HOST_ROOT: /host
@@ -73,7 +73,7 @@ services:
     volumes:
       - /:/host:ro,rslave          # every host mount, read-only
       - ./data:/data               # history (and, before the hub/agent split, the hub's data)
-      - agent-socket:/run/monitorr
+      - agent-socket:/run/gaugery
     user: "0:0"                    # root inside, for reading every mount and process...
     pid: host                      # ...of the host (its processes and network counters)
     read_only: true
@@ -87,7 +87,7 @@ services:
 
   docker-proxy:
     image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
-    container_name: monitorr-docker-proxy
+    container_name: gaugery-docker-proxy
     restart: unless-stopped
     environment:
       CONTAINERS: 1                                # list, inspect, stats and logs
@@ -103,7 +103,7 @@ services:
   # COMPOSE_PROFILES=actions in .env, together with ALLOW_CONTAINER_ACTIONS on the agent.
   docker-actions:
     image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
-    container_name: monitorr-docker-actions
+    container_name: gaugery-docker-actions
     restart: unless-stopped
     profiles: [actions]
     environment:

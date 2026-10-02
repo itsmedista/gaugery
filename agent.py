@@ -1,6 +1,6 @@
-"""Monitorr agent: collects one server's data and answers only the hub (Bearer token).
+"""Gaugery agent: collects one server's data and answers only the hub (Bearer token).
 
-It is the only part of Monitorr with host access. It listens either on a Unix socket that only
+It is the only part of Gaugery with host access. It listens either on a Unix socket that only
 the hub's group may open (the hub on the same machine), or on TLS with its own certificate
 (a remote hub, which pins that certificate via the pairing code).
 """
@@ -32,8 +32,8 @@ HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8088"))
 INTERVAL = float(os.environ.get("SAMPLE_INTERVAL", "2"))
 RETENTION_DAYS = float(os.environ.get("RETENTION_DAYS", "14"))
-DB_PATH = os.environ.get("DB_PATH", "/var/lib/monitorr/metrics.db")
-LISTEN = os.environ.get("AGENT_LISTEN", "tcp")   # "tcp" (TLS on HOST:PORT) or "unix:/run/monitorr/agent.sock"
+DB_PATH = os.environ.get("DB_PATH", "/var/lib/gaugery/metrics.db")
+LISTEN = os.environ.get("AGENT_LISTEN", "tcp")   # "tcp" (TLS on HOST:PORT) or "unix:/run/gaugery/agent.sock"
 LIVE_SECONDS = 3600
 SPANS = {"1h": 3600, "6h": 21600, "24h": 86400, "7d": 604800}
 LEGACY_TABLES = ("servers", "checks", "check_results", "prefs")  # hub data from before the hub/agent split
@@ -246,7 +246,7 @@ def create_app(token):
         yield
         await docker.close()
 
-    app = FastAPI(title="Monitorr agent", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="Gaugery agent", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.middleware("http")
     async def require_token(request: Request, call_next):
@@ -356,7 +356,7 @@ def create_app(token):
         except DockerError as e:
             raise HTTPException(e.status, str(e)) from None
         by = str(body.get("by") or "the hub")[:120]
-        monitor.alerts.note(f"Container {name} {done}", f"Done from Monitorr by {by}.")
+        monitor.alerts.note(f"Container {name} {done}", f"Done from Gaugery by {by}.")
         return {"ok": True, "message": f"{name} {done}"}
 
     # ---------- one-time hand-over of the hub's data from before the split ----------
@@ -409,6 +409,6 @@ def serve():
         uvicorn.Server(uvicorn.Config(app, log_level="warning")).run(sockets=[sock])
         return
     cert, key = tlsutil.ensure_cert(Path(DB_PATH).parent)
-    print(f"Monitorr agent on https://{HOST}:{PORT}. Pairing code for the hub:\n  {tlsutil.pairing_code(cert, token)}",
+    print(f"Gaugery agent on https://{HOST}:{PORT}. Pairing code for the hub:\n  {tlsutil.pairing_code(cert, token)}",
           flush=True)
     uvicorn.run(app, host=HOST, port=PORT, ssl_certfile=cert, ssl_keyfile=key, log_level="warning")
