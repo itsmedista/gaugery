@@ -1,4 +1,4 @@
-"""Login for the Monitorr hub: one user, a scrypt password hash, optional two-factor codes (TOTP),
+"""Login for the Gaugery hub: one user, a scrypt password hash, optional two-factor codes (TOTP),
 and signed session cookies that can be revoked.
 
 Create the hash with:  python app.py --hash-password
@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-COOKIE = "monitorr_session"
+COOKIE = "gaugery_session"
 SESSION_DAYS = float(os.environ.get("SESSION_DAYS", "30"))
 REAUTH_AFTER = 15 * 60           # sensitive actions ask for the password again after this long
 FREE_TRIES, MAX_DELAY, FAIL_WINDOW = 3, 30, 900
@@ -52,7 +52,7 @@ def verify_password(password, stored):
 
 
 def prompt_hash():
-    pw = getpass.getpass("New Monitorr password: ")
+    pw = getpass.getpass("New Gaugery password: ")
     if len(pw) < 10:
         raise SystemExit("Use at least 10 characters.")
     if getpass.getpass("Repeat it: ") != pw:
@@ -105,7 +105,7 @@ def totp_secret():
 
 
 def totp_uri(secret, user):
-    return f"otpauth://totp/Monitorr:{quote(user)}?secret={secret}&issuer=Monitorr"
+    return f"otpauth://totp/Gaugery:{quote(user)}?secret={secret}&issuer=Gaugery"
 
 
 def _totp(secret, counter):
@@ -151,11 +151,11 @@ class Auth:
 
     def check_config(self):
         if os.environ.get("AUTH_DISABLED"):
-            raise SystemExit("AUTH_DISABLED was removed: Monitorr always asks for a password. Remove the setting.")
+            raise SystemExit("AUTH_DISABLED was removed: Gaugery always asks for a password. Remove the setting.")
         if not self.pw_hash:
             raise SystemExit(
-                "Monitorr needs a password. Run `python app.py --hash-password` (or "
-                "`docker compose run --rm monitorr python app.py --hash-password`) and set "
+                "Gaugery needs a password. Run `python app.py --hash-password` (or "
+                "`docker compose run --rm gaugery python app.py --hash-password`) and set "
                 "AUTH_PASSWORD_HASH to the result.")
 
     @staticmethod

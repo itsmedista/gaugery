@@ -1,4 +1,4 @@
-"""Browser-facing hardening for Monitorr: security headers, a strict Content-Security-Policy,
+"""Browser-facing hardening for Gaugery: security headers, a strict Content-Security-Policy,
 cross-site request refusal, request size limits, and an optional Host allow-list."""
 import base64
 import hashlib
@@ -7,9 +7,9 @@ import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
-MAX_BODY = 64 * 1024                     # every request body Monitorr accepts is tiny JSON
+MAX_BODY = 64 * 1024                     # every request body Gaugery accepts is tiny JSON
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
-# Optional: the host names this instance answers to (e.g. "monitorr.lan,100.64.0.5"). Stops DNS
+# Optional: the host names this instance answers to (e.g. "gaugery.lan,100.64.0.5"). Stops DNS
 # rebinding, where a web page points its own domain at your server's IP to read it.
 ALLOWED_HOSTS = {h.strip().lower() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()}
 

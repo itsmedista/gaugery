@@ -1,4 +1,4 @@
-"""Hub reading agent replies. Run: python test_remote.py (inside the monitorr image)."""
+"""Hub reading agent replies. Run: python test_remote.py (inside the gaugery image)."""
 import asyncio
 import gzip
 
@@ -30,3 +30,15 @@ async def main():
 
 
 asyncio.run(main())
+
+# pairing codes: new prefix, and the old one from agents not yet upgraded from Monitorr
+import tlsutil  # noqa: E402
+code = "{}." + tlsutil._b64(bytes(32)) + "." + "t" * 30
+for prefix in ("gry1", "mtr1"):
+    assert tlsutil.parse_pairing(code.format(prefix)) == (bytes(32), "t" * 30)
+try:
+    tlsutil.parse_pairing(code.format("xyz1"))
+    raise SystemExit("an unknown prefix was accepted")
+except ValueError:
+    pass
+print("pairing ok")

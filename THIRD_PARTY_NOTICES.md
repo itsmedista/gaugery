@@ -1,6 +1,6 @@
 # Third-party software
 
-Monitorr is licensed under the GNU AGPL v3 (see [LICENSE](LICENSE)). It uses the following
+Gaugery is licensed under the GNU AGPL v3 (see [LICENSE](LICENSE)). It uses the following
 software, each under its own license. All of them can be combined with the AGPL.
 
 ## Bundled in this repository
@@ -37,14 +37,14 @@ certifi is used unmodified. Its source, under the MPL-2.0, is at
 
 ## Container images pulled by the Docker setup
 
-Monitorr's repository contains no copies of these images. Docker downloads them from Docker Hub
+Gaugery's repository contains no copies of these images. Docker downloads them from Docker Hub
 when you install.
 
 | Image | License |
 |---|---|
-| `python:3.12-slim`: Debian and CPython, the base of Monitorr's own image | CPython under the PSF License. Debian packages under their own licenses (GPL, LGPL, MIT and others), listed in `/usr/share/doc/*/copyright` in the image |
+| `python:3.12-slim`: Debian and CPython, the base of Gaugery's own image | CPython under the PSF License. Debian packages under their own licenses (GPL, LGPL, MIT and others), listed in `/usr/share/doc/*/copyright` in the image |
 | `tecnativa/docker-socket-proxy` | Apache-2.0 (includes HAProxy, GPL-2.0) |
 
-If you **publish a built Monitorr image** (for example to a registry), you are distributing
+If you **publish a built Gaugery image** (for example to a registry), you are distributing
 those Debian packages too. Their GPL and LGPL terms then require you to offer their source,
 for example by pointing to Debian's archive for the exact package versions.

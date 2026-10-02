@@ -2,19 +2,19 @@
 // Loaded in <head>, after i18n.js, so the theme and language are right before the page draws.
 (() => {
   const DEFAULTS = {theme: 'dark', accent: 'teal', lang: '', time_format: '24h', temp_unit: 'C', default_range: 'live', start_page: 'overview'};
-  const CACHE = 'monitorr.prefs';   // only look-and-feel is remembered in the browser, never your name or email
+  const CACHE = 'gaugery.prefs';   // only look-and-feel is remembered in the browser, never your name or email
   const root = document.documentElement;
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
   let cached = {};
   try { cached = JSON.parse(localStorage.getItem(CACHE)) || {}; } catch { /* private window: defaults */ }
 
-  const M = window.Monitorr = {me: null, prefs: {...DEFAULTS, ...cached}};
+  const M = window.Gaugery = {me: null, prefs: {...DEFAULTS, ...cached}};
   const dark = matchMedia('(prefers-color-scheme: light)');
 
   function applyLook(p) {
     root.dataset.theme = p.theme === 'system' ? (dark.matches ? 'light' : 'dark') : p.theme;
     root.dataset.accent = p.accent;
-    window.dispatchEvent(new CustomEvent('monitorr:theme'));
+    window.dispatchEvent(new CustomEvent('gaugery:theme'));
   }
   dark.addEventListener('change', () => { if (M.prefs.theme === 'system') applyLook(M.prefs); });
   applyLook(M.prefs);

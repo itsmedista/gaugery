@@ -4,7 +4,7 @@
 #
 # List your disks under devices: ls /dev/sd? /dev/nvme?n?  Only these are exposed, not the whole /dev.
 services:
-  monitorr-agent:
+  gaugery-agent:
     environment:
       SMART: "true"
     cap_add:

@@ -5,7 +5,7 @@
 #
 # AMD GPUs need nothing: their counters are in /sys, which the agent already reads.
 services:
-  monitorr-agent:
+  gaugery-agent:
     environment:
       NVIDIA_DRIVER_CAPABILITIES: utility   # nvidia-smi only, no CUDA or video
     deploy:

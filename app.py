@@ -1,4 +1,4 @@
-"""Monitorr entry point.
+"""Gaugery entry point.
 
   python app.py hub        the web interface (unprivileged)
   python app.py agent      collects one server's data for a hub
@@ -15,7 +15,7 @@ Tools:
 import os
 import sys
 
-os.umask(0o077)  # everything Monitorr writes (databases, keys, tokens) is for its own user only
+os.umask(0o077)  # everything Gaugery writes (databases, keys, tokens) is for its own user only
 
 if hasattr(__import__("signal"), "SIGUSR1"):  # `docker kill -s USR1 <container>` prints every thread's stack
     import faulthandler
@@ -89,7 +89,7 @@ def main():
         db.execute("INSERT INTO events VALUES (?, 'action', 'info', ?, ?)",
                    (time.time(), "Password reset", "From the command line on the server. Everyone was signed out."))
         db.commit()
-        return print("Password changed. Restart Monitorr's web interface to use it (everyone is signed out).")
+        return print("Password changed. Restart Gaugery's web interface to use it (everyone is signed out).")
     if "--disable-2fa" in args:
         import time
         from common import open_db

@@ -1,4 +1,4 @@
-"""The servers a Monitorr hub watches. Each runs the Monitorr agent; the hub polls their summaries
+"""The servers a Gaugery hub watches. Each runs the Gaugery agent; the hub polls their summaries
 for the overview and relays their API to the dashboard.
 
 This machine's agent is reached over a Unix socket (LOCAL_AGENT). Other agents are reached over
@@ -197,7 +197,7 @@ class Remotes:
             except Exception:  # noqa: BLE001
                 detail = None
             raise AgentError(str(detail)[:300] if detail else (
-                "No Monitorr agent answered at this address" if r.status_code == 404
+                "No Gaugery agent answered at this address" if r.status_code == 404
                 else f"The agent answered {r.status_code}"))
 
     @staticmethod
@@ -207,7 +207,7 @@ class Remotes:
         async for chunk in r.aiter_bytes():
             body += chunk
             if len(body) > MAX_REPLY:
-                raise AgentError(f"The agent sent more than {MAX_REPLY >> 20} MB, so Monitorr stopped reading")
+                raise AgentError(f"The agent sent more than {MAX_REPLY >> 20} MB, so Gaugery stopped reading")
         headers = {k: v for k, v in r.headers.items() if k.lower() not in ("content-encoding", "content-length", "transfer-encoding")}
         return httpx.Response(r.status_code, headers=headers, content=bytes(body), request=r.request)
 
@@ -218,7 +218,7 @@ class Remotes:
         except httpx.HTTPError as e:
             if "CERTIFICATE_VERIFY_FAILED" in str(e):  # not the certificate it was paired with
                 raise AgentError(f"{srv['name'] or 'The agent'} presented a different certificate than when it "
-                                 "was paired, so Monitorr refused the connection.") from None
+                                 "was paired, so Gaugery refused the connection.") from None
             raise AgentError(f"Can't reach {srv['name'] or 'this server'} ({type(e).__name__})") from None
         self._check(r)
         return r
@@ -228,7 +228,7 @@ class Remotes:
         try:
             return clean_summary(r.json())
         except ValueError:
-            raise AgentError("The address answered, but not like a Monitorr agent") from None
+            raise AgentError("The address answered, but not like a Gaugery agent") from None
 
     async def get(self, sid, path, params):
         return await self._send(self.servers[sid], "GET", path, params=params)

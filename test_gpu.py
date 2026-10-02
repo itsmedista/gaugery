@@ -1,4 +1,4 @@
-"""GPU readers. Run: python test_gpu.py (needs psutil, e.g. inside the monitorr image)."""
+"""GPU readers. Run: python test_gpu.py (needs psutil, e.g. inside the gaugery image)."""
 import os
 import tempfile
 

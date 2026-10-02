@@ -1,4 +1,4 @@
-"""Memory-module parser. Run: python test_hardware.py (needs psutil, e.g. inside the monitorr image)."""
+"""Memory-module parser. Run: python test_hardware.py (needs psutil, e.g. inside the gaugery image)."""
 from collectors import parse_dimms, hardware
 
 

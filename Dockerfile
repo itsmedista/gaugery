@@ -5,7 +5,7 @@ FROM python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4d
 RUN apt-get update \
  && apt-get install -y --no-install-recommends smartmontools iputils-ping \
  && rm -rf /var/lib/apt/lists/* \
- && useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin monitorr \
+ && useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin gaugery \
  && mkdir -p /data && chown 10001:10001 /data
 
 WORKDIR /app
