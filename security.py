@@ -42,8 +42,8 @@ class PageCSP:
             self._key, self._value = key, "; ".join([
                 "default-src 'self'",
                 "script-src 'self' " + " ".join(sorted(set(hashes))),
-                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-                "font-src https://fonts.gstatic.com",
+                "style-src 'self' 'unsafe-inline'",
+                "font-src 'self'",                  # fonts are served from here: no third party sees visitors
                 "img-src 'self' data:",
                 "connect-src 'self'",
                 "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'",

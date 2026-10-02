@@ -265,9 +265,39 @@ with the address `https://monitorr-agent:8088` and the pairing code from
 - Stuck network mounts are marked "not responding" instead of freezing the page.
 - Inside a VM, disks usually don't expose SMART; the page shows "No SMART".
 
+## License and privacy
+
+Copyright (C) 2026 itsmedista.
+
+Monitorr is free software: you can redistribute it and/or modify it under the terms of the
+[GNU Affero General Public License, version 3](LICENSE) (AGPL-3.0-only). It comes with no
+warranty. In short:
+- You may use, study, change and share it, also commercially.
+- If you share it, or let other people use a **modified** copy over a network, you must
+  offer them the complete source of your version under the same license. The "Source code"
+  link on the sign-in and Settings pages is how users find it: point it at your copy.
+
+Other software it uses and their licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+**Privacy:** Monitorr sends nothing to its authors or anyone else: no telemetry, analytics or
+update checks, and its fonts are served locally. It sets one sign-in cookie, needed to stay
+signed in, so there's no cookie banner. [PRIVACY.md](PRIVACY.md) lists everything it stores,
+how long it keeps it, and every connection it makes.
+
 ## What's changed
 
 Newest first. Each entry links to its pull request, which has the details and test results.
+
+### License, privacy and fonts ([#12](https://github.com/itsmedista/server-monitor/pull/12))
+- Licensed under the GNU AGPL v3, with a "Source code" link on the sign-in and Settings
+  pages.
+- [PRIVACY.md](PRIVACY.md) lists everything Monitorr stores, for how long, and every
+  connection it makes. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists the licenses
+  of the software it uses.
+- The fonts are now served by Monitorr instead of Google Fonts, so opening a page no longer
+  sends your IP address to Google. Monitorr now makes no connection you didn't configure.
+- The sign-in page now loads its translations and theme. Before, they were blocked until
+  you signed in, so it always showed in English.
 
 ### Security review of #4 to #10 ([#11](https://github.com/itsmedista/server-monitor/pull/11))
 - The web interface stops reading an agent's answer past 32 MB (counted after

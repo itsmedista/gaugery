@@ -140,7 +140,7 @@ echo "Copying files to $DEST..."
 mkdir -p "$DEST" /var/lib/monitorr
 chmod 755 "$DEST"
 cp -r "$SRC"/{app,hub,agent,common,collectors,alerts,auth,remote,checks,dockerops,security,tlsutil,netguard}.py \
-      "$SRC"/requirements.txt "$SRC"/static "$DEST"/
+      "$SRC"/requirements.txt "$SRC"/static "$SRC"/{LICENSE,THIRD_PARTY_NOTICES.md,PRIVACY.md} "$DEST"/
 chmod -R go+rX "$DEST"   # readable by the monitorr user, writable by root only
 
 echo "Creating Python environment..."
