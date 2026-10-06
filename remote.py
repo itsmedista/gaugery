@@ -20,7 +20,7 @@ import tlsutil
 POLL_SECONDS = 5
 # The only agent endpoints the hub relays for the dashboard. Each agent still decides for
 # itself whether logs and container actions are allowed, and for which containers.
-AGENT_PATHS = {"info", "recent", "state", "history", "stream", "summary", "logs", "logstream", "container-action"}
+AGENT_PATHS = {"info", "recent", "state", "history", "stream", "summary", "logs", "logstream", "container-action", "access"}
 STREAM_PATHS = {"stream", "logstream"}
 TIMEOUT = httpx.Timeout(8, connect=4)
 # Biggest real answer is a few MB ("recent" on a many-core server). A hacked agent must not be able

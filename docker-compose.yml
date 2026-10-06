@@ -77,7 +77,9 @@ services:
     user: "0:0"                    # root inside, for reading every mount and process...
     pid: host                      # ...of the host (its processes and network counters)
     read_only: true
-    tmpfs: [/tmp]
+    # The host's /run holds the control sockets of Docker, containerd, systemd and others.
+    # A read-only mount doesn't stop connecting to a socket, so hide it: root here must not reach them.
+    tmpfs: [/tmp, /host/run]
     cap_drop: [ALL]                # ...but without root's powers beyond these two:
     cap_add: [CHOWN, DAC_READ_SEARCH]
     security_opt: ["no-new-privileges:true"]
