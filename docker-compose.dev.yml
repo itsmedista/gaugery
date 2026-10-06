@@ -56,7 +56,9 @@ services:
     user: "0:0"
     pid: host
     read_only: true
-    tmpfs: [/tmp]
+    # The host's /run holds the control sockets of Docker, containerd, systemd and others.
+    # A read-only mount doesn't stop connecting to a socket, so hide it: root here must not reach them.
+    tmpfs: [/tmp, /host/run]
     cap_drop: [ALL]
     cap_add: [CHOWN, DAC_READ_SEARCH]
     security_opt: ["no-new-privileges:true"]
@@ -89,7 +91,9 @@ services:
     user: "0:0"
     pid: host
     read_only: true
-    tmpfs: [/tmp]
+    # The host's /run holds the control sockets of Docker, containerd, systemd and others.
+    # A read-only mount doesn't stop connecting to a socket, so hide it: root here must not reach them.
+    tmpfs: [/tmp, /host/run]
     cap_drop: [ALL]
     cap_add: [DAC_READ_SEARCH]
     security_opt: ["no-new-privileges:true"]

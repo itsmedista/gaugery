@@ -266,6 +266,12 @@ def create_app(token):
             "logs": LOGS.on, "logs_for": LOGS.describe(),
             "actions": ACTIONS_PERMIT.on, "actions_for": ACTIONS_PERMIT.describe()}}
 
+    @app.get("/api/access")
+    def api_access():
+        """Firewall rules and Tailscale setup: read-only, read when asked (they rarely change)."""
+        import netaccess
+        return netaccess.snapshot()
+
     @app.get("/api/summary")
     def api_summary():
         sm = monitor.summary()
