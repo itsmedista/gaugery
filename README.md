@@ -233,6 +233,10 @@ What Gaugery does for you:
 - **Browser protections:** a strict Content-Security-Policy (only Gaugery's own scripts
   run), no framing, `nosniff`, no referrer, `SameSite=Strict` cookies, and changes only
   from Gaugery's own pages as JSON.
+- **No back door to the host through sockets:** the agent sees the host's files read-only,
+  but a read-only mount doesn't stop connecting to a socket. So the host's `/run` (the
+  Docker, containerd, systemd and D-Bus sockets) is hidden from the agent. Under Docker it
+  can't reach those services, only the locked-down socket proxy.
 - **Remote servers are untrusted:** the web interface checks and trims what agents send,
   never serves an agent's reply as a page, and the pages escape everything.
 - **Supply chain:** the base images (Python, socket proxy) are pinned by digest, and every
@@ -247,6 +251,39 @@ What stays your job:
 - **Update now and then:** pull the new base image and put its digest in the Dockerfile
   (the command is in the comment there), refresh the package lock (the command is at the top of
   `requirements.txt`), then `docker compose up -d --build`.
+
+## Firewall and Tailscale
+
+Each server's page has a **Firewall** section. It's read-only: Gaugery shows these settings
+and can't change them.
+
+- **Firewall:** the allow, deny, reject and limit rules from **ufw**, and the zones from
+  **firewalld** (allowed services and ports, rich rules, what happens to everything else).
+  They're read from the firewall's own configuration files, so the agent needs no extra
+  privileges. Rules written directly with nftables or iptables aren't shown; the page says
+  when there are some. With ufw and Docker on the same server, it reminds you that ports
+  published by containers bypass ufw.
+- **Tailscale:** connection status, this device's name and Tailscale IPs, tailnet, MagicDNS,
+  exit node, key expiry, health warnings, the other devices with their status, and what
+  **Serve** and **Funnel** share: each port and path, what it serves, and whether only your
+  tailnet or **anyone on the internet** (Funnel) can reach it.
+
+**Without Docker** it works on its own. **With Docker**, start with the Tailscale file:
+
+    docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d
+
+(with `docker-compose.agent.yml` instead on agent-only servers).
+
+How it stays read-only:
+- **Under Docker, the agent never gets tailscaled's socket.** A small separate reader does.
+  It runs as `nobody`, with no network, no privileges and a read-only filesystem.
+  tailscaled only lets root or its operator change settings, so even a hijacked reader
+  can't. The reader refuses to start as root.
+- **Only two fixed GET requests** are ever sent to tailscaled (`status` and `serve-config`).
+  Nothing from the page or the web interface reaches it.
+- **Only what the page shows leaves the server:** no keys, and no account email addresses.
+- **Without Docker** the agent asks tailscaled directly, with the same two GET requests.
+  The agent runs as root there, as it always has.
 
 ## Test changes in the sandbox first
 
@@ -280,6 +317,7 @@ with the address `https://gaugery-agent:8088` and the pairing code from
 - Top processes by CPU and memory
 - Hardware: system and board, BIOS, processor (cores, cache, top speed, virtualization),
   memory modules per slot, disks, GPUs
+- Firewall rules (ufw, firewalld) and Tailscale status, Serve and Funnel
 
 ## Notes
 
@@ -310,6 +348,17 @@ how long it keeps it, and every connection it makes.
 ## What's changed
 
 Newest first. Each entry links to its pull request, which has the details and test results.
+
+### Firewall and Tailscale, and a hole closed ([#14](https://github.com/itsmedista/server-monitor/pull/14))
+- **New Firewall section** on each server's page: ufw and firewalld allow and deny rules,
+  plus Tailscale status, devices, and what Serve and Funnel share, marking anything open to
+  the whole internet. It's read-only. With Docker, add `docker-compose.tailscale.yml`. See
+  *Firewall and Tailscale* above.
+- **Security fix:** under Docker, the agent could connect to the host's own Docker socket,
+  and others in `/run`, through its read-only view of the host. That bypassed the
+  locked-down socket proxy: someone who took over the agent could have taken over the
+  server. The host's `/run` is now hidden from the agent. Update with `git pull` and
+  `docker compose up -d --build`.
 
 ### Monitorr is now Gaugery ([#13](https://github.com/itsmedista/server-monitor/pull/13))
 - New name, because another self-hosted monitoring project is already called Monitorr. The

@@ -36,7 +36,9 @@ Wrong-password counters per IP address exist **only in memory** and are gone aft
 | Alert history (e.g. "/data is 92% full", "container web exited") | 90 days |
 
 Shown live but **never saved**: the process list (process names, users, PIDs, CPU and
-memory), GPU processes, container logs, and hardware details. Container logs have obvious
+memory), GPU processes, container logs, hardware details, firewall rules, and Tailscale
+status (this device's name and IPs, its other devices' names, IPs and operating systems,
+what it shares with Serve and Funnel). Container logs have obvious
 secrets (passwords, tokens, keys) blanked out before they leave the server.
 
 ### In your browser
@@ -62,6 +64,9 @@ Only the ones you set up:
   configure, which is `ntfy.sh` only if you choose it. Set nothing and nothing is sent.
 - **Docker** on the same machine, through a read-only socket proxy, to list containers
   (and, if you enabled actions, to start, stop or restart them).
+- **Tailscale** on the same machine, if it's installed: two read-only questions to
+  tailscaled's local socket (status, and what Serve and Funnel share). Nothing leaves the
+  machine; tailscaled answers from what it already knows.
 
 At install and update only, Docker or `pip` download Gaugery's dependencies from Docker
 Hub and PyPI.

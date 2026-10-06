@@ -1,0 +1,33 @@
+# Tailscale status on the server page (Firewall & Tailscale). Start with:
+#   docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d
+# (or with docker-compose.agent.yml on an agent-only server)
+#
+# The agent itself never gets tailscaled's socket. A small reader does, running as `nobody`, with
+# no network and no privileges. tailscaled only lets root (or its operator) change settings, so the
+# reader can look but not touch, even if something took it over. It asks every 30 s and leaves the
+# answer in a file the agent reads.
+services:
+  tailscale-reader:
+    image: gaugery:latest
+    container_name: gaugery-tailscale-reader
+    command: ["python", "app.py", "--tailscale-reader"]
+    user: "65534:65534"            # nobody: read-only access as far as tailscaled is concerned
+    network_mode: none             # talks to tailscaled over its socket only
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - /run/tailscale:/run/tailscale:ro
+      - tailscale-status:/tailscale-status
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  gaugery-agent:
+    environment:
+      TAILSCALE_STATUS_FILE: /tailscale-status/status.json
+    volumes:
+      - tailscale-status:/tailscale-status:ro
+
+volumes:
+  tailscale-status:
