@@ -185,6 +185,10 @@ body.can-logs .cv canvas{cursor:pointer}
 .hwc dt{color:var(--muted)} .hwc dd{margin:0;overflow-wrap:anywhere}
 .hwc .tw{margin-top:12px;border-color:var(--line)}
 .hwc .none{color:var(--faint);font-size:12px;margin-top:10px}
+.hwc .warnline{color:var(--warn);font-size:12px;margin-top:10px}
+.hwc h3 .sub{font-weight:400;margin-left:6px}
+.act{font-weight:600;font-size:12px}
+.act.allow,.act.ok{color:var(--ok)} .act.deny,.act.reject,.act.crit{color:var(--crit)} .act.limit,.act.other{color:var(--warn)}
 .grid>.hwc.wide{flex-basis:100%}
 
 /* tables */
@@ -270,6 +274,7 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
     <a data-i18n href="#memory"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="4.5" width="13" height="7" rx="1"/><path d="M4.5 7v2M7 7v2M9.5 7v2M12 7v2M4 11.5V13M12 11.5V13"/></svg>Memory</a>
     <a data-i18n href="#storage"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>Storage<span class="badge" id="b-storage" hidden></span></a>
     <a data-i18n href="#network"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 2.5v10M2.5 10 5 12.5 7.5 10M11 13.5v-10M8.5 6 11 3.5 13.5 6"/></svg>Network</a>
+    <a data-i18n href="#access" id="nav-access"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 1.8 13 3.8v4c0 3-2.1 5.3-5 6.4-2.9-1.1-5-3.4-5-6.4v-4z"/><path d="m5.8 8 1.5 1.5 3-3"/></svg>Firewall</a>
     <a data-i18n href="#sensors" id="nav-sensors" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 9.3V3a1.5 1.5 0 0 1 3 0v6.3a3 3 0 1 1-3 0Z"/></svg>Sensors</a>
     <a data-i18n href="#gpu" id="nav-gpu" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="4" width="13" height="8" rx="1"/><circle cx="10" cy="8" r="2"/><path d="M4 6.5v3M3.5 12v1.5M6.5 12v1.5"/></svg>GPU</a>
     <a data-i18n href="#containers"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m8 1.8 5.5 3v6.4L8 14.2l-5.5-3V4.8Z"/><path d="M2.7 4.9 8 7.8l5.3-2.9M8 7.8v6.3"/></svg>Containers<span class="badge" id="b-ctr" hidden></span></a>
@@ -312,6 +317,11 @@ tbody tr:hover td{background:rgba(255,255,255,.015)}
     <section id="network">
       <div class="sh"><h2 data-i18n>Network</h2><span class="note" data-i18n>Received above the line, sent below</span></div>
       <div class="grid" id="g-net"></div>
+    </section>
+
+    <section id="access">
+      <div class="sh"><h2 data-i18n>Firewall &amp; Tailscale</h2><span class="note" data-i18n>Read-only: Gaugery can't change these</span></div>
+      <div class="grid" id="acc"><div class="empty" data-i18n>Loading…</div></div>
     </section>
 
     <section id="sensors" hidden>
@@ -836,6 +846,75 @@ function renderHardware() {
   if (gpus.length) cards.push(hwCard(t('Graphics'), [], hwTable([[t('GPU')], [t('Video memory'), 1]], gpus.map(g => [g.name, g.mem_total ? fmtBytes(g.mem_total) : null])), '', 'hw-gpu'));
   $('#hw').innerHTML = cards.join('');
 }
+/* ---------------- firewall & Tailscale (read-only) ---------------- */
+function accTable(head, rows) {   // cells are HTML: every value in them goes through esc() first
+  return `<div class="tw"><table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+const act = (a, label) => `<span class="act ${oneOf(a, ['allow', 'deny', 'reject', 'limit', 'ok', 'crit'], 'other')}">${esc(label || {allow: t('Allow'), deny: t('Deny'), reject: t('Reject'), limit: t('Limit')}[a] || a)}</span>`;
+const isoDate = v => { const d = new Date(v || 0); return d.getFullYear() > 2000 ? d.toLocaleDateString() : null; };
+function ufwCard(m) {
+  const pol = v => ({allow: t('Allow'), deny: t('Deny'), reject: t('Reject')}[v] || v || null);
+  const rows = (m.rules || []).map(r => [act(r.action),
+    esc(r.app || (r.port ? r.port + (r.proto !== 'any' ? '/' + r.proto : '') : t('any'))) + (r.to !== 'any' ? ` <span class="sub">${esc(t('on {addr}', {addr: r.to}))}</span>` : ''),
+    esc(r.from_app || (r.from === 'any' ? t('anywhere') : r.from)) + (r.from_port ? ` <span class="sub">${esc(t('port {port}', {port: r.from_port}))}</span>` : ''),
+    esc(r.route ? t('Routed') : r.direction === 'out' ? t('Out') : t('In')) + (r.interface ? ` <span class="sub">${esc(r.interface)}</span>` : ''),
+    `<span class="sub">${esc(r.comment)}</span>`]);
+  const docker = m.enabled && lastState?.docker?.available
+    ? `<div class="warnline">${esc(t('Ports published by Docker containers bypass ufw: Docker puts its own rules ahead of it.'))}</div>` : '';
+  return hwCard(t('Firewall: ufw'), [[t('Status'), m.enabled ? t('Active') : t('Inactive')], [t('Incoming by default'), pol(m.defaults?.in)],
+      [t('Outgoing by default'), pol(m.defaults?.out)], [t('Routed by default'), pol(m.defaults?.routed)]],
+    (rows.length ? accTable([t('Action'), t('To'), t('From'), t('Direction'), t('Comment')], rows) : `<div class="none">${esc(t('No rules: only the defaults above apply.'))}</div>`)
+      + (m.truncated ? `<div class="none">${esc(t('Showing the first 200 rules.'))}</div>` : '') + docker, 'wide');
+}
+function firewalldCards(m) {
+  const target = {default: t('Rejected'), reject: t('Rejected'), '%%reject%%': t('Rejected'), drop: t('Dropped silently'), accept: t('Allowed')};
+  return (m.zones || []).map(z => hwCard(t('Firewall: firewalld') + ' · ' + z.zone + (z.default ? ' (' + t('default zone') + ')' : ''),
+    [[t('Status'), m.enabled ? t('Active') : t('Inactive')], [t('Everything not listed'), target[z.target] || z.target],
+     [t('Interfaces'), (z.interfaces || []).join(', ')], [t('Sources'), (z.sources || []).join(', ')]],
+    (z.rows || []).length ? accTable([t('Action'), t('Rule')], z.rows.map(r => [act(r.action), esc(r.what)])) : `<div class="none">${esc(t('Nothing is allowed in this zone.'))}</div>`, 'wide'));
+}
+function tailscaleCard(ts) {
+  if (!ts || ts.error) {
+    const missing = !ts || ts.error === 'not installed';
+    return hwCard(t('Tailscale'), [], `<div class="none">${esc(missing
+      ? t("Tailscale isn't installed here, or Gaugery can't see it. With Docker, add docker-compose.tailscale.yml to show it.")
+      : t(ts.error))}</div>`, 'wide');
+  }
+  const me = ts.self || {}, state = {Running: t('Connected'), NeedsLogin: t('Signed out'), Stopped: t('Stopped'), Starting: t('Starting')}[ts.state] || ts.state;
+  const serve = ts.serve || [], peers = ts.peers || [];
+  const serveHTML = !ts.serve_known ? `<div class="none">${esc(t('Serve and Funnel status is not available.'))}</div>`
+    : serve.length ? accTable([t('Port'), t('Path'), t('Serves'), t('Who can reach it')], serve.map(r => [esc(r.port + (r.kind !== 'https' ? '/' + r.kind : '')), esc(r.path),
+        esc(r.target), r.public ? act('crit', t('Anyone on the internet (Funnel)')) : act('ok', t('Your tailnet only'))]))
+    : `<div class="none">${esc(t('Nothing is shared with Tailscale Serve or Funnel.'))}</div>`;
+  const peerHTML = peers.length ? accTable([t('Device'), t('Tailscale IP'), t('OS'), t('Status'), ''], peers.map(p => [
+      esc(p.name) + (p.dns ? ` <span class="sub">${esc(p.dns)}</span>` : ''), esc(p.ips[0] || ''), esc(p.os),
+      p.online ? act('ok', t('Online')) : `<span class="sub">${esc(t('Offline'))}</span>`,
+      `<span class="sub">${esc([p.exit_node ? t('exit node in use') : p.exit_option ? t('offers exit node') : '', ...(p.tags || [])].filter(Boolean).join(' · '))}</span>`]))
+    : `<div class="none">${esc(t('No other devices.'))}</div>`;
+  return hwCard(t('Tailscale'), [[t('Status'), state], [t('Name'), me.dns || me.name], [t('Tailscale IPs'), (me.ips || []).join(', ')],
+      [t('Tailnet'), ts.tailnet], [t('MagicDNS'), ts.tailnet ? (ts.magic_dns ? t('On') : t('Off')) : null], [t('Version'), ts.version],
+      [t('Exit node in use'), ts.exit_node || null], [t('Offers itself as an exit node'), me.exit_option ? t('Yes') : null],
+      [t('Key expires'), isoDate(me.key_expiry)]],
+    (ts.health || []).map(h => `<div class="warnline">${esc(h)}</div>`).join('')
+      + (ts.stale ? `<div class="warnline">${esc(t('This is {n} minutes old: is the Tailscale reader running?', {n: Math.round(ts.stale / 60)}))}</div>` : '')
+      + `<h3 style="margin-top:14px">${esc(t('Serve and Funnel'))}</h3>` + serveHTML
+      + `<h3 style="margin-top:14px">${esc(t('Devices'))}<span class="sub">${esc(String(ts.peer_count || 0))}</span></h3>` + peerHTML, 'wide');
+}
+function renderAccess(a) {
+  const fw = a.firewall || {}, cards = [];
+  for (const m of fw.managers || []) m.manager === 'ufw' ? cards.push(ufwCard(m)) : cards.push(...firewalldCards(m));
+  if (!(fw.managers || []).length) cards.push(hwCard(t('Firewall'), [], `<div class="none">${esc(t('No ufw or firewalld setup found. This server may have no firewall, or rules set up another way.'))}</div>`, 'wide'));
+  if ((fw.other || []).length) cards.push(hwCard(t('Other firewall rules'), [], `<div class="none">${esc(t('Rules managed directly with {tools} are active too but not shown: Gaugery reads only ufw and firewalld.', {tools: fw.other.join(', ')}))}</div>`, 'wide'));
+  cards.push(tailscaleCard(a.tailscale));
+  $('#acc').innerHTML = cards.join('');
+}
+async function loadAccess() {
+  try { renderAccess(await getJSON(API + 'access')); }
+  catch (e) {
+    if (e.message === 'signed out') return;
+    $('#acc').innerHTML = `<div class="empty">${esc(/No Gaugery agent answered/.test(e.message) ? t("This server's agent is too old to show this. Update Gaugery on it.") : t(e.message))}</div>`;
+  }
+}
 function renderDrives(st) {
   const host = $('#drives'); const drives = st.drives || []; const seen = new Set();
   let flagged = 0;
@@ -1337,13 +1416,14 @@ async function boot() {
       $('#host').textContent = t('Offline'); $('#hostsub').textContent = t(e.message);
       setConn('offline'); setTimeout(boot, 10000); return;
     }
-    mode = 'demo'; $('#services').hidden = $('#nav-services').hidden = true; demo = makeDemo(); info = demo.info; for (const p of demo.recent()) live.push(p.t, p.s);
+    mode = 'demo'; $('#services').hidden = $('#nav-services').hidden = $('#access').hidden = $('#nav-access').hidden = true; demo = makeDemo(); info = demo.info; for (const p of demo.recent()) live.push(p.t, p.s);
   }
   $('#logs').hidden = $('#nav-logs').hidden = !feat().logs; document.body.classList.toggle('can-logs', !!feat().logs);
   renderInfo(); buildGauges();
   if (mode === 'server') {
     try { onSample(await getJSON(API + 'state')); } catch (e) { ensureCharts(); requestDraw(); }
     connect();
+    loadAccess(); setInterval(loadAccess, 60000);
     if (Gaugery.prefs.default_range && Gaugery.prefs.default_range !== 'live') setRange(Gaugery.prefs.default_range);
   } else {
     setConn('demo'); onSample(demo.tick()); setInterval(() => onSample(demo.tick()), 2000);

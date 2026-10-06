@@ -11,6 +11,7 @@ Tools:
   python app.py --disable-2fa      turn off two-factor sign-in (if you lost your phone)
   python app.py --reset-password   set a new password (if you forgot it); signs everyone out
   python app.py --healthcheck      used by Docker's HEALTHCHECK
+  python app.py --tailscale-reader Docker only: the unprivileged Tailscale reader (docker-compose.tailscale.yml)
 """
 import os
 import sys
@@ -66,6 +67,11 @@ def main():
         return new_token()
     if "--healthcheck" in args:
         return healthcheck()
+    if "--tailscale-reader" in args:   # Docker only: see docker-compose.tailscale.yml
+        if os.getuid() == 0:
+            raise SystemExit("The Tailscale reader must not run as root: tailscaled would let it change settings.")
+        import netaccess
+        return netaccess.run_reader(os.environ.get("TAILSCALE_STATUS_FILE", "/tailscale-status/status.json"))
     if "--pairing-code" in args:
         import tlsutil
         from agent import DB_PATH
