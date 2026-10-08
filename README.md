@@ -109,7 +109,8 @@ settings loaded.)
 
 The web interface must reach the agent's port; Tailscale is the easy way (set the
 agent's `BIND`/`HOST` to its `tailscale ip -4`). Each agent sends its own phone alerts, so
-set `NTFY_URL` on each one if you want them.
+set `NTFY_URL` on each one if you want them. Set `WEBHOOK_URL` as well to also POST every
+alert as JSON to something like an n8n workflow (e.g. for automated triage).
 
 The overview shows one card per server: green with no active alerts, red with alerts or
 when it can't be reached. Every card is the same size, so rows always line up:

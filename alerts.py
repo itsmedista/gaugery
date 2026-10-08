@@ -1,4 +1,5 @@
-"""Threshold alerts with hold times, an event log, and optional ntfy notifications."""
+"""Threshold alerts with hold times, an event log, and optional ntfy/webhook notifications."""
+import json
 import os
 import threading
 import time
@@ -37,6 +38,8 @@ class AlertEngine:
         self.log = deque(history or [], maxlen=100)
         self.ntfy_url = os.environ.get("NTFY_URL", "").strip()
         self.ntfy_token = os.environ.get("NTFY_TOKEN", "").strip()
+        self.webhook_url = os.environ.get("WEBHOOK_URL", "").strip()
+        self.webhook_secret = os.environ.get("WEBHOOK_SECRET", "").strip()
         self._seen = set()
 
     def _check(self, now, aid, cond, severity, title, detail, hold=0):
@@ -166,6 +169,8 @@ class AlertEngine:
             self.on_event(ev)
         if self.ntfy_url:
             threading.Thread(target=self._notify, args=(ev,), daemon=True).start()
+        if self.webhook_url:
+            threading.Thread(target=self._webhook, args=(ev, a.get("id")), daemon=True).start()
 
     def _notify(self, ev):
         resolved, action = ev["kind"] == "resolved", ev["kind"] == "action"
@@ -181,6 +186,18 @@ class AlertEngine:
         headers = {k: " ".join(v.split()).encode("latin-1", "replace").decode("latin-1") for k, v in headers.items()}
         try:
             req = urllib.request.Request(self.ntfy_url, data=ev["detail"].encode(), headers=headers)
+            urllib.request.urlopen(req, timeout=10).read()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _webhook(self, ev, alert_id):
+        """POST the event as JSON, e.g. to an n8n webhook that triages it with Claude."""
+        body = json.dumps({"host": self.host, "id": alert_id, **ev}).encode()
+        headers = {"Content-Type": "application/json"}
+        if self.webhook_secret:
+            headers["X-Webhook-Secret"] = self.webhook_secret
+        try:
+            req = urllib.request.Request(self.webhook_url, data=body, headers=headers, method="POST")
             urllib.request.urlopen(req, timeout=10).read()
         except Exception:  # noqa: BLE001
             pass
