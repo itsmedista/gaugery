@@ -62,6 +62,9 @@ Only the ones you set up:
   the cloud metadata service or the machine's own loopback address.
 - **ntfy** (optional): alert and security-event titles and details go to the `NTFY_URL` you
   configure, which is `ntfy.sh` only if you choose it. Set nothing and nothing is sent.
+- **Webhook** (optional): the same alert and security events, as JSON, go to the `WEBHOOK_URL`
+  you configure (e.g. an n8n instance). `WEBHOOK_SECRET`, if set, is sent as a header so the
+  receiving end can check the request came from Gaugery. Set nothing and nothing is sent.
 - **Docker** on the same machine, through a read-only socket proxy, to list containers
   (and, if you enabled actions, to start, stop or restart them).
 - **Tailscale** on the same machine, if it's installed: two read-only questions to

@@ -140,6 +140,14 @@ if [[ $ASK == 1 ]]; then
     ask ntfy_token "Access token for that topic" none '^[A-Za-z0-9_.-]+$'
     ANSWER[NTFY_TOKEN]=$ntfy_token
   fi
+
+  echo "  Webhook for alerts (e.g. an n8n workflow): POSTs each one as JSON, for automated triage."
+  ask webhook "Webhook URL" none '^https?://[^[:space:]|&\\"]+$'
+  ANSWER[WEBHOOK_URL]=$webhook
+  if [[ -n $webhook ]]; then
+    ask webhook_secret "Shared secret to verify requests (optional)" none '^[A-Za-z0-9_.-]+$'
+    ANSWER[WEBHOOK_SECRET]=$webhook_secret
+  fi
   echo
 fi
 
